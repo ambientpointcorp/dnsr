@@ -1,0 +1,319 @@
+---
+title: "Introduction to the Dynamic Nelson-Siegel Model"
+author: "dnsr package"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to the Dynamic Nelson-Siegel Model}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  dpi = 100
+)
+```
+
+## Overview
+
+The `dnsr` package provides a comprehensive implementation of the Dynamic Nelson-Siegel (DNS) model for yield curve modeling and analysis. This vignette introduces the model and demonstrates how to use the package for yield curve fitting, factor dynamics estimation, and scenario simulation.
+
+**Note**: This vignette covers the basic functionality of the package. For advanced stochastic simulation using the YUIMA package, please see the `vignette("yuima-integration", package = "dnsr")`.
+
+```{r setup}
+library(dnsr)
+```
+
+## The Nelson-Siegel Model
+
+The Nelson-Siegel model is a parsimonious parametric model for the yield curve. It expresses the yield curve as a function of maturity using three factors:
+
+$$y(m) = \beta_1 + \beta_2 \left(\frac{1-e^{-\lambda m}}{\lambda m}\right) + \beta_3 \left(\frac{1-e^{-\lambda m}}{\lambda m} - e^{-\lambda m}\right)$$
+
+where:
+
+- $y(m)$ is the yield at maturity $m$
+- $\beta_1$ represents the long-term level of interest rates
+- $\beta_2$ represents the slope of the yield curve (short-term minus long-term rates)
+- $\beta_3$ represents the curvature or "hump" of the yield curve
+- $\lambda$ controls the decay rate of the factor loadings
+
+The model is popular because:
+
+1. It is flexible enough to capture various yield curve shapes
+2. It has a clear economic interpretation
+3. It is parsimonious, requiring only 4 parameters
+
+## Dynamic Extension
+
+The DNS model extends the static Nelson-Siegel model by allowing the factors ($\beta_1$, $\beta_2$, $\beta_3$) to vary over time. These factors are modeled as stochastic processes, typically using Ornstein-Uhlenbeck processes:
+
+$$d\beta_i(t) = \kappa_i(\theta_i - \beta_i(t))dt + \sigma_i dW_i(t)$$
+
+where:
+
+- $\kappa_i$ is the speed of mean reversion
+- $\theta_i$ is the long-run mean
+- $\sigma_i$ is the volatility
+- $W_i(t)$ is a Wiener process
+
+This dynamic extension allows for modeling the time evolution of yield curves and scenario generation.
+
+## Getting Treasury Yield Data
+
+The first step is to download Treasury yield curve data. The `dnsr` package provides functions to download and process this data:
+
+```{r get_data, eval=FALSE}
+# Download recent Treasury yield curve data (last ~2 years)
+yield_data <- get_treasury_yield_combined(start_date = "2022-01-01")
+
+# Look at the data structure
+head(yield_data)
+```
+
+```{r eval=FALSE}
+# For this vignette, we'll create a small synthetic dataset
+dates <- seq(as.Date("2023-01-01"), as.Date("2023-12-31"), by = "week")
+maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
+
+# Create synthetic yield data frame
+set.seed(123)
+yield_data <- data.frame(Date = dates)
+
+# Base yield curve shape
+base_curve <- c(0.035, 0.037, 0.039, 0.040, 0.042, 0.043, 0.044, 0.045, 0.046, 0.045)
+
+for (i in seq_along(maturities)) {
+  # Add time series variation to each maturity
+  m <- maturities[i]
+  col_name <- as.character(m)
+  
+  # Create synthetic yields with level, slope, and curvature variations
+  level_trend <- 0.005 * sin(2 * pi * (1:length(dates)) / length(dates))
+  slope_effect <- 0.001 * (max(maturities) - m) * cos(4 * pi * (1:length(dates)) / length(dates))
+  curvature_effect <- 0.001 * exp(-(m - 5)^2) * sin(6 * pi * (1:length(dates)) / length(dates))
+  
+  yield_data[[col_name]] <- base_curve[i] + level_trend + slope_effect + curvature_effect + 
+    rnorm(length(dates), 0, 0.0005)
+}
+```
+
+## Fitting the DNS Model
+
+Now that we have yield curve data, we can fit the DNS model:
+
+```{r fit_dns, eval=FALSE}
+# Fit the DNS model to historical yield curves
+dns_result <- fit_dns_model(yield_data, show_progress = TRUE)
+
+# Look at the fitted parameters
+head(dns_result$parameters)
+```
+
+We can visualize the fitted yield curves to assess the model's performance:
+
+```{r plot_fits, eval=FALSE}
+# Plot actual vs. fitted yield curves for a few dates
+p <- plot_yield_curves(yield_data, dns_result)
+p
+```
+
+We can also examine the time series of the fitted factors:
+
+```{r plot_factors, eval=FALSE}
+# Plot the factor time series
+factor_plots <- plot_factor_time_series(dns_result)
+factor_plots$factors
+```
+
+## Estimating Factor Dynamics
+
+To capture the dynamics of the yield curve, we need to estimate the stochastic processes governing the factors:
+
+```{r dynamics, eval=FALSE}
+# Estimate factor dynamics
+dynamics <- estimate_dns_dynamics(dns_result$parameters)
+
+# Look at the estimated parameters
+cat("Level factor (β₁):\n")
+cat("  Mean reversion speed (κ):", round(dynamics$beta1$kappa, 4), "\n")
+cat("  Long-run mean (θ):", round(dynamics$beta1$theta, 4), "\n")
+cat("  Volatility (σ):", round(dynamics$beta1$sigma, 4), "\n")
+cat("  Half-life:", round(dynamics$beta1$half_life_days, 1), "days\n\n")
+
+cat("Slope factor (β₂):\n")
+cat("  Mean reversion speed (κ):", round(dynamics$beta2$kappa, 4), "\n")
+cat("  Long-run mean (θ):", round(dynamics$beta2$theta, 4), "\n")
+cat("  Volatility (σ):", round(dynamics$beta2$sigma, 4), "\n")
+cat("  Half-life:", round(dynamics$beta2$half_life_days, 1), "days\n\n")
+
+cat("Curvature factor (β₃):\n")
+cat("  Mean reversion speed (κ):", round(dynamics$beta3$kappa, 4), "\n")
+cat("  Long-run mean (θ):", round(dynamics$beta3$theta, 4), "\n")
+cat("  Volatility (σ):", round(dynamics$beta3$sigma, 4), "\n")
+cat("  Half-life:", round(dynamics$beta3$half_life_days, 1), "days\n\n")
+
+# Look at factor correlations
+print(round(dynamics$correlation, 3))
+```
+
+The estimated dynamics give us insights into how the yield curve evolves over time. For example:
+
+- The level factor typically has slow mean reversion (long half-life)
+- The slope factor has moderate mean reversion
+- The curvature factor often has the fastest mean reversion
+
+## Simulating Future Yield Curves
+
+We can use the estimated dynamics to simulate future yield curve scenarios. The package offers two simulation methods:
+
+1. **Basic Simulation**: Using standard discretization methods
+2. **Advanced Simulation**: Using the YUIMA package for accurate SDE simulation (covered in the YUIMA integration vignette)
+
+Here we'll demonstrate the basic simulation:
+
+```{r simulation, eval=FALSE}
+# Convert dynamics to simulation parameters
+sim_params <- dns_dynamics_to_sim_params(dynamics)
+
+# Get initial factors from most recent observation
+initial_factors <- as.numeric(dns_result$parameters[1, c("beta1", "beta2", "beta3")])
+
+# Simulate yield curves
+sim_result <- simulate_dns_yield_curves(
+  params = sim_params,
+  initial_factors = initial_factors,
+  maturities = as.numeric(names(yield_data)[-1]),
+  time_horizon = 5,   # 5 years
+  n_steps = 60,       # Monthly steps
+  n_paths = 100       # 100 simulation paths
+)
+
+# Plot simulated yield curves at specific horizons
+yield_plots <- plot_simulated_yields(
+  sim_result, 
+  time_points = c(0, 1, 3, 5),  # Now, 1 year, 3 years, 5 years
+  path_subset = 1:5             # Show 5 paths
+)
+
+yield_plots$yield_curves
+```
+
+We can also examine the evolution of the simulated factors:
+
+```{r factor_sim, eval=FALSE}
+# Plot simulated factors
+factor_sim_plots <- plot_simulated_factors(sim_result)
+factor_sim_plots$level
+```
+
+## Advanced Stochastic Simulation
+
+For more advanced stochastic simulation using the YUIMA package, we can use the enhanced simulation functions:
+
+```{r yuima_sim, eval=FALSE}
+# Check if YUIMA is installed
+if (requireNamespace("yuima", quietly = TRUE)) {
+  # Simulate using YUIMA's Euler-Maruyama scheme
+  yuima_sim <- simulate_dns_yield_curves(
+    params = sim_params,
+    initial_factors = initial_factors,
+    maturities = as.numeric(names(yield_data)[-1]),
+    time_horizon = 5,
+    n_steps = 60,
+    n_paths = 100,
+    sim_method = "euler"  # Use YUIMA's Euler-Maruyama scheme
+  )
+  
+  # Plot the results
+  yuima_plots <- plot_simulated_yields(
+    yuima_sim, 
+    time_points = c(0, 1, 3, 5)
+  )
+  
+  # See the YUIMA integration vignette for more details on advanced simulation
+}
+```
+
+## Visualizing DNS Model Properties
+
+The DNS model's flexibility comes from its factor loadings structure. We can visualize these loadings:
+
+```{r loadings, eval=FALSE}
+# Plot factor loadings
+p <- plot_dns_loadings(
+  maturities = seq(0, 30, length.out = 100),
+  lambda = dns_result$parameters$lambda[1]
+)
+p
+```
+
+## Advanced Visualizations
+
+The package provides several additional visualization functions:
+
+### Heat Map of Yield Curve Evolution
+
+```{r heatmap, eval=FALSE}
+# Create a heat map of yield curve evolution
+p <- plot_yield_heatmap(yield_data)
+p
+```
+
+### 3D Yield Surface
+
+```{r surface, eval=FALSE}
+# Create a 3D visualization (requires plotly)
+if (requireNamespace("plotly", quietly = TRUE)) {
+  surface <- plot_yield_surface(yield_data)
+  # For non-interactive output:
+  # plotly::orca(surface, "yield_surface.png")
+}
+```
+
+### PCA Analysis
+
+```{r pca, eval=FALSE}
+# Perform principal component analysis
+pca_result <- plot_yield_pca(yield_data)
+pca_result$plots$weights
+```
+
+## Model Comparison
+
+The DNS model can be compared to other term structure models:
+
+```{r comparison, eval=FALSE}
+# Compare DNS with other models for a specific date
+comparison <- compare_term_structure_models(
+  yield_data,
+  date_to_compare = yield_data$Date[1],
+  models = c("NS", "Spline")
+)
+comparison$plot
+```
+
+## Conclusion
+
+The `dnsr` package provides a comprehensive framework for yield curve modeling using the Dynamic Nelson-Siegel approach. It offers tools for:
+
+1. Downloading and preprocessing Treasury yield data
+2. Fitting the DNS model to historical data
+3. Estimating factor dynamics
+4. Simulating future yield curve scenarios
+5. Visualizing results in various formats
+
+For advanced stochastic simulation using the YUIMA package, please refer to the dedicated vignette:
+
+```r
+vignette("dnsr-yuima-integration", package = "dnsr")
+```
+
+These capabilities make it valuable for interest rate risk management, ALM modeling, economic scenario generation, and fixed income research.
+
+For more details on specific functions, please refer to their documentation.

@@ -1,0 +1,21 @@
+# R Package Structure for DNS Model Implementation
+
+# Package directory structure
+# dnsr/
+# ├── DESCRIPTION
+# ├── NAMESPACE
+# ├── R/
+# │   ├── data_utils.R
+# │   ├── dns_model.R
+# │   ├── dns_dynamics.R 
+# │   ├── dns_simulation.R
+# │   └── visualization.R
+# ├── man/
+# │   └── [generated documentation files]
+# ├── tests/
+# │   └── testthat/
+# │       ├── test-data-utils.R
+# │       ├── test-dns-model.R
+# │       └── test-dns-dynamics.R
+# └── vignettes/
+#     └── dns-model-introduction.Rmd
