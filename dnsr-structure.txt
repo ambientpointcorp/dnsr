@@ -7,7 +7,7 @@
 # ├── R/
 # │   ├── data_utils.R
 # │   ├── dns_model.R
-# │   ├── dns_dynamics.R 
+# │   ├── dns_dynamics.R
 # │   ├── dns_simulation.R
 # │   └── visualization.R
 # ├── man/
