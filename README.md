@@ -1,10 +1,5 @@
 # dnsr: Dynamic Nelson-Siegel Model in R
 
-[![Travis build status](https://travis-ci.org/username/dnsr.svg?branch=master)](https://travis-ci.org/username/dnsr)
-[![CRAN status](https://www.r-pkg.org/badges/version/dnsr)](https://CRAN.R-project.org/package=dnsr)
-[![Codecov test coverage](https://codecov.io/gh/username/dnsr/branch/master/graph/badge.svg)](https://codecov.io/gh/username/dnsr?branch=master)
-[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://www.tidyverse.org/lifecycle/#stable)
-
 ## Overview
 
 The `dnsr` package provides a comprehensive implementation of the Dynamic Nelson-Siegel (DNS) model for yield curve modeling and analysis. It offers a complete workflow from data acquisition to model fitting, factor dynamics estimation, advanced stochastic simulation, and visualization.
