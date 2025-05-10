@@ -107,10 +107,34 @@ estimate_dns_dynamics <- function(params_df, min_observations = 20, dt = 1/252) 
     # Linear regression: Δβ(t) ~ κθΔt - κβ(t-1)Δt
     model <- lm(factor_change ~ factor_level, data = reg_data)
 
-    # Extract parameters with more robust calculations
-    kappa <- -coef(model)[2] / dt
-    theta <- if (kappa > 0) -coef(model)[1] / (coef(model)[2]) else mean(reg_data$factor_level)
-    sigma <- sd(residuals(model)) / sqrt(dt)
+    # FIX: Extract parameters with more robust handling of NA/NULL values
+    # Check if coefficients are NA or NULL
+    if (is.null(coef(model)) || length(coef(model)) < 2 || any(is.na(coef(model)))) {
+      warning(paste("Regression failed for factor", factor_name, "- using fallback values"))
+      kappa <- 0.001  # Small positive value as fallback
+      theta <- factor_summary$mean
+      sigma <- factor_summary$sd * sqrt(dt)
+    } else {
+      # Normal calculation
+      kappa <- -coef(model)[2] / dt
+
+      # FIX: Check if kappa is valid before using it in division
+      if (is.na(kappa) || kappa <= 0) {
+        # If kappa is NA or not positive, use a fallback approach
+        kappa <- max(0.001, abs(kappa))  # Ensure positive value
+        theta <- factor_summary$mean
+      } else {
+        # Normal calculation with valid kappa
+        theta <- -coef(model)[1] / coef(model)[2]
+      }
+
+      sigma <- sd(residuals(model)) / sqrt(dt)
+
+      # Handle missing or invalid values
+      if (is.na(sigma) || sigma <= 0) {
+        sigma <- 0.001  # Fallback to small positive value
+      }
+    }
 
     # Calculate half-life of mean reversion
     half_life_years <- if (kappa > 0) log(2) / kappa else Inf
