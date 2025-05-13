@@ -165,11 +165,7 @@ get_treasury_yield_data <- function(url, convert_to_decimal = TRUE, verbose = FA
   if (convert_to_decimal) {
     for (col in names(yield_data)[-1]) {
       if (is.numeric(yield_data[[col]])) {
-        # Check if values seem to be already in decimal form
-        if (max(yield_data[[col]], na.rm = TRUE) > 1 &&
-            median(yield_data[[col]], na.rm = TRUE) > 1) {
-          yield_data[[col]] <- yield_data[[col]] / 100
-        }
+        yield_data[[col]] <- yield_data[[col]] / 100
       }
     }
   }

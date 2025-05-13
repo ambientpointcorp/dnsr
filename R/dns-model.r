@@ -244,7 +244,7 @@ fit_dns_model <- function(yield_data, n_days = 60, parallel = FALSE,
   checkmate::assert_logical(show_progress, len = 1)
 
   # Extract dates
-  dates <- yield_data$Date[1:min(as.integer(n_days), nrow(yield_data))]
+  dates <- yield_data$Date[(nrow(yield_data) - min(as.integer(n_days), nrow(yield_data)) + 1):nrow(yield_data)]
 
   # Get maturities from column names
   maturities <- as.numeric(colnames(yield_data)[-1])
