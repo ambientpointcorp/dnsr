@@ -1,23 +1,132 @@
 #' @title Treasury Yield Curve Data Utilities
-#' @description Functions for downloading and processing U.S. Treasury yield curve data.
+#' @description Functions for downloading and processing U.S. Treasury yield curve data from FRED API.
 
 #' @importFrom httr GET content
-#' @importFrom readr read_csv
-#' @importFrom dplyr %>% mutate across where lag filter select all_of bind_rows
+#' @importFrom dplyr %>% mutate across where lag filter select all_of bind_rows arrange
 #' @importFrom lubridate mdy date
-#' @importFrom tidyr replace_na
+#' @importFrom tidyr pivot_wider replace_na
 #' @importFrom stats na.omit
 
-#' @title Download and Process Treasury Yield Curve Data
+#' @title Download Treasury Yield Data from FRED
 #'
 #' @description
-#' Downloads U.S. Treasury yield curve data from the Treasury website and processes it into
-#' a consistent format suitable for DNS model calibration.
+#' Downloads U.S. Treasury yield data for specific maturities from the Federal Reserve Economic Data (FRED) API.
 #'
-#' @param url Character. URL for the Treasury yield curve data CSV file.
+#' @param series_id Character. FRED series ID for the treasury yield (e.g., "DGS10" for 10-year).
+#' @param api_key Character. FRED API key. If NULL, will look for fred_api_key environment variable.
+#' @param start_date Date or character in "YYYY-MM-DD" format. The earliest date to include.
+#' @param end_date Date or character in "YYYY-MM-DD" format. The latest date to include.
+#' @param verbose Logical. If TRUE, print processing information.
+#'
+#' @return A data.frame with date and yield value columns.
+#'
+#' @details
+#' Requires a FRED API key which can be obtained free at https://fred.stlouisfed.org/docs/api/api_key.html
+#' Set the environment variable fred_api_key or pass it directly to the function.
+#'
+#' @examples
+#' \dontrun{
+#' # Set your API key first
+#' Sys.setenv(fred_api_key = "your_api_key_here")
+#' yield_10y <- fetch_fred_series("DGS10", start_date = "2020-01-01")
+#' head(yield_10y)
+#' }
+#'
+#' @export
+fetch_fred_series <- function(series_id, api_key = NULL, start_date = NULL,
+                              end_date = NULL, verbose = FALSE) {
+  # Parameter validation
+  checkmate::assert_string(series_id, min.chars = 1)
+  checkmate::assert_logical(verbose, len = 1)
+
+  # Get API key
+  if (is.null(api_key)) {
+    api_key <- Sys.getenv("fred_api_key")
+    if (api_key == "") {
+      stop("FRED API key not found. Set fred_api_key environment variable or pass api_key parameter.")
+    }
+  }
+
+  # Create informative logging function
+  log_info <- function(...) {
+    if (verbose) cat(..., "\n")
+  }
+
+  # Build API URL
+  base_url <- "https://api.stlouisfed.org/fred/series/observations"
+
+  params <- list(
+    series_id = series_id,
+    api_key = api_key,
+    file_type = "json"
+  )
+
+  if (!is.null(start_date)) {
+    params$observation_start <- as.character(as.Date(start_date))
+  }
+
+  if (!is.null(end_date)) {
+    params$observation_end <- as.character(as.Date(end_date))
+  }
+
+  log_info(sprintf("Fetching FRED series: %s", series_id))
+
+  # Make API request
+  response <- tryCatch({
+    httr::GET(base_url, query = params)
+  }, error = function(e) {
+    stop(sprintf("Failed to connect to FRED API: %s", e$message))
+  })
+
+  # Check response status
+  if (httr::http_error(response)) {
+    stop(sprintf("FRED API request failed with status %d: %s",
+                 httr::status_code(response),
+                 httr::http_status(response)$message))
+  }
+
+  # Parse JSON response
+  content <- httr::content(response, as = "parsed")
+
+  if (is.null(content$observations) || length(content$observations) == 0) {
+    warning(sprintf("No data returned for series %s", series_id))
+    return(data.frame(date = as.Date(character(0)), value = numeric(0)))
+  }
+
+  # Extract data
+  dates <- sapply(content$observations, function(x) x$date)
+  values <- sapply(content$observations, function(x) {
+    val <- x$value
+    if (val == ".") return(NA_real_)
+    return(as.numeric(val))
+  })
+
+  result <- data.frame(
+    date = as.Date(dates),
+    value = values,
+    stringsAsFactors = FALSE
+  )
+
+  log_info(sprintf("Retrieved %d observations for %s", nrow(result), series_id))
+
+  return(result)
+}
+
+
+#' @title Get Treasury Yield Curve Data from FRED
+#'
+#' @description
+#' Downloads U.S. Treasury yield curve data from FRED API for multiple maturities
+#' and processes it into a consistent format suitable for DNS model calibration.
+#'
+#' @param api_key Character. FRED API key. If NULL, will look for fred_api_key environment variable.
+#' @param maturities Character vector. Maturities to download. Options include:
+#'   "1MO", "3MO", "6MO", "1", "2", "3", "5", "7", "10", "20", "30"
+#' @param start_date Date or character in "YYYY-MM-DD" format. The earliest date to include.
+#' @param end_date Date or character in "YYYY-MM-DD" format. The latest date to include.
 #' @param convert_to_decimal Logical. If TRUE, convert yields from percentages to decimal format.
 #' @param verbose Logical. If TRUE, print processing information.
-#' @param fill_missing Logical. If TRUE, attempt to fill in missing values.
+#' @param fill_missing Logical. If TRUE, attempt to fill in missing values using forward fill.
 #'
 #' @return A data.frame with processed yield curve data where:
 #'   - The first column is 'Date' containing the observation dates.
@@ -25,165 +134,140 @@
 #'   - Column names represent maturities in years.
 #'
 #' @details
-#' This function handles the inconsistencies in Treasury data formatting, cleans column names
-#' to represent maturities in years, and processes the data for DNS model fitting.
+#' This function fetches data from FRED for the following series:
+#' - DGS1MO (1-Month)
+#' - DGS3MO (3-Month)
+#' - DGS6MO (6-Month)
+#' - DGS1 (1-Year)
+#' - DGS2 (2-Year)
+#' - DGS3 (3-Year)
+#' - DGS5 (5-Year)
+#' - DGS7 (7-Year)
+#' - DGS10 (10-Year)
+#' - DGS20 (20-Year)
+#' - DGS30 (30-Year)
+#'
+#' Requires a FRED API key which can be obtained free at https://fred.stlouisfed.org/docs/api/api_key.html
 #'
 #' @examples
 #' \dontrun{
-#' url <- "https://home.treasury.gov/system/files/276/yield-curve-rates-1990-2024.csv"
-#' yield_data <- get_treasury_yield_data(url)
+#' # Set your API key first
+#' Sys.setenv(fred_api_key = "your_api_key_here")
+#' yield_data <- get_treasury_yield_data(start_date = "2020-01-01")
 #' head(yield_data)
 #' }
 #'
 #' @export
-get_treasury_yield_data <- function(url, convert_to_decimal = TRUE, verbose = FALSE, fill_missing = TRUE) {
+get_treasury_yield_data <- function(api_key = NULL,
+                                    maturities = c("1MO", "3MO", "6MO", "1", "2", "3",
+                                                   "5", "7", "10", "20", "30"),
+                                    start_date = NULL,
+                                    end_date = NULL,
+                                    convert_to_decimal = TRUE,
+                                    verbose = FALSE,
+                                    fill_missing = TRUE) {
   # Parameter validation
-  checkmate::assert_string(url, min.chars = 10)
   checkmate::assert_logical(convert_to_decimal, len = 1)
   checkmate::assert_logical(verbose, len = 1)
   checkmate::assert_logical(fill_missing, len = 1)
+  checkmate::assert_character(maturities, min.len = 1)
 
   # Create informative logging function
   log_info <- function(...) {
     if (verbose) cat(..., "\n")
   }
 
-  # Download and read the file with error handling
-  log_info("Downloading data from:", url)
+  # Map maturity codes to FRED series IDs
+  maturity_map <- c(
+    "1MO" = "DGS1MO",
+    "2MO" = "DGS2MO",
+    "3MO" = "DGS3MO",
+    "6MO" = "DGS6MO",
+    "1" = "DGS1",
+    "2" = "DGS2",
+    "3" = "DGS3",
+    "5" = "DGS5",
+    "7" = "DGS7",
+    "10" = "DGS10",
+    "20" = "DGS20",
+    "30" = "DGS30"
+  )
 
-  temp_file <- tempfile(fileext = '.csv')
+  # Map maturity codes to column names (years)
+  maturity_years <- c(
+    "1MO" = "0.0833",
+    "2MO" = "0.1667",
+    "3MO" = "0.25",
+    "6MO" = "0.5",
+    "1" = "1",
+    "2" = "2",
+    "3" = "3",
+    "5" = "5",
+    "7" = "7",
+    "10" = "10",
+    "20" = "20",
+    "30" = "30"
+  )
 
-  # Download the file with comprehensive error handling
-  tryCatch({
-    download.file(url, temp_file, quiet = !verbose, mode = "wb")
-
-    # Check if file exists and has content
-    if (!file.exists(temp_file) || file.size(temp_file) == 0) {
-      stop("Failed to download data or empty file received")
-    }
-
-    # Try to read the CSV
-    yield_data <- tryCatch({
-      read_csv(temp_file, show_col_types = FALSE)
-    }, error = function(e) {
-      stop("Failed to read CSV data: ", e$message)
-    })
-  },
-  warning = function(w) {
-    message("Warning in download: ", w$message)
-  },
-  error = function(e) {
-    if (file.exists(temp_file)) file.remove(temp_file)
-    stop("Failed to download or process data: ", e$message)
-  },
-  finally = {
-    # Make sure we clean up the temporary file
-    if (file.exists(temp_file)) file.remove(temp_file)
-  })
-
-  # Show structure information in verbose mode
-  if (verbose) {
-    log_info("Structure of loaded data:")
-    str(yield_data)
-    log_info("First few rows of data:")
-    print(head(yield_data, 3))
-    log_info("Number of columns:", ncol(yield_data))
-    log_info("Column names:", paste(names(yield_data), collapse = ", "))
+  # Validate maturities
+  invalid_maturities <- setdiff(maturities, names(maturity_map))
+  if (length(invalid_maturities) > 0) {
+    stop(sprintf("Invalid maturities: %s. Valid options are: %s",
+                 paste(invalid_maturities, collapse = ", "),
+                 paste(names(maturity_map), collapse = ", ")))
   }
 
-  # Ensure Date column exists
-  if (!"Date" %in% names(yield_data)) {
-    # Try to find a date column with different name
-    date_col_idx <- grep("date", names(yield_data), ignore.case = TRUE)[1]
-    if (!is.na(date_col_idx)) {
-      names(yield_data)[date_col_idx] <- "Date"
-    } else {
-      stop("Cannot find a date column in the data")
-    }
-  }
+  log_info("Fetching Treasury yield data from FRED...")
+  log_info(sprintf("Maturities: %s", paste(maturities, collapse = ", ")))
 
-  # Identify maturity columns (all columns except Date)
-  maturity_cols <- setdiff(names(yield_data), "Date")
+  # Fetch data for each maturity
+  all_data <- list()
 
-  # Create clean maturity labels based on column names
-  clean_maturities <- sapply(maturity_cols, function(col) {
-    # Try to extract maturity in years
-    if (grepl("mo", col, ignore.case = TRUE)) {
-      # Column has months
-      months <- as.numeric(gsub("[^0-9]", "", col))
-      if (!is.na(months)) {
-        return(round(months / 12, 4))
-      }
-    } else if (grepl("yr", col, ignore.case = TRUE) || grepl("year", col, ignore.case = TRUE)) {
-      # Column has years
-      years <- as.numeric(gsub("[^0-9]", "", col))
-      if (!is.na(years)) {
-        return(years)
-      }
-    }
+  for (mat in maturities) {
+    series_id <- maturity_map[[mat]]
+    col_name <- maturity_years[[mat]]
 
-    # Try to extract numeric part as a fallback
-    num <- as.numeric(gsub("[^0-9.]", "", col))
-    if (!is.na(num)) {
-      if (num < 12 && !grepl("yr", col, ignore.case = TRUE)) {
-        # Likely months if small number and not explicitly years
-        return(round(num / 12, 4))
-      } else {
-        return(num)
-      }
-    }
-
-    # If all else fails, return NA
-    return(NA)
-  })
-
-  # Check if we have any valid maturities
-  if (all(is.na(clean_maturities))) {
-    stop("Failed to extract any valid maturity information from column names")
-  }
-
-  # Create new column names
-  new_names <- c("Date", as.character(clean_maturities))
-
-  # Handle duplicates in the new column names
-  if (length(new_names) != length(unique(new_names))) {
-    log_info("Warning: Duplicate column names detected after cleaning")
-
-    # Find and resolve duplicates
-    for (i in 2:length(new_names)) {
-      if (new_names[i] %in% new_names[1:(i-1)]) {
-        # If duplicate, slightly modify the value
-        new_names[i] <- sprintf("%.4f", as.numeric(new_names[i]) + 0.0001)
-      }
-    }
-  }
-
-  # Apply the new column names
-  names(yield_data) <- new_names
-
-  # Convert yield values from percentages to decimals if requested
-  if (convert_to_decimal) {
-    for (col in names(yield_data)[-1]) {
-      if (is.numeric(yield_data[[col]])) {
-        yield_data[[col]] <- yield_data[[col]] / 100
-      }
-    }
-  }
-
-  # Handle date formatting
-  if (is.character(yield_data$Date)) {
-    # Try to parse date with lubridate
     tryCatch({
-      # First try mdy format (common for Treasury data)
-      yield_data$Date <- mdy(yield_data$Date)
+      df <- fetch_fred_series(
+        series_id = series_id,
+        api_key = api_key,
+        start_date = start_date,
+        end_date = end_date,
+        verbose = verbose
+      )
+
+      if (nrow(df) > 0) {
+        names(df)[names(df) == "value"] <- col_name
+        all_data[[mat]] <- df
+      }
     }, error = function(e) {
-      # If that fails, try other formats
-      tryCatch({
-        yield_data$Date <- as.Date(yield_data$Date)
-      }, error = function(e2) {
-        warning("Could not parse dates in expected formats. Date column may not be properly formatted.")
-      })
+      warning(sprintf("Failed to fetch %s: %s", series_id, e$message))
     })
+  }
+
+  if (length(all_data) == 0) {
+    stop("Failed to fetch any data from FRED")
+  }
+
+  # Merge all series by date
+  log_info("Merging data across maturities...")
+
+  yield_data <- all_data[[1]]
+  if (length(all_data) > 1) {
+    for (i in 2:length(all_data)) {
+      yield_data <- merge(yield_data, all_data[[i]], by = "date", all = TRUE)
+    }
+  }
+
+  # Rename date column to Date for consistency
+  names(yield_data)[names(yield_data) == "date"] <- "Date"
+
+  # Convert to decimal if requested (FRED data is already in percentage form)
+  if (convert_to_decimal) {
+    log_info("Converting yields from percentage to decimal...")
+    for (col in setdiff(names(yield_data), "Date")) {
+      yield_data[[col]] <- yield_data[[col]] / 100
+    }
   }
 
   # Sort data by date (most recent first)
@@ -191,17 +275,18 @@ get_treasury_yield_data <- function(url, convert_to_decimal = TRUE, verbose = FA
 
   # Fill missing values if requested
   if (fill_missing) {
-    # Replace missing values with previous value
+    log_info("Filling missing values using forward fill...")
     yield_data <- yield_data %>%
       arrange(desc(Date)) %>%
-      mutate(across(where(is.numeric), ~ifelse(is.na(.), lag(.), .)))
-  }
-
-  # Convert any character columns to numeric (except Date)
-  for (col in setdiff(names(yield_data), "Date")) {
-    if (is.character(yield_data[[col]])) {
-      yield_data[[col]] <- as.numeric(yield_data[[col]])
-    }
+      mutate(across(where(is.numeric), ~{
+        # Forward fill (carry last observation forward)
+        for(i in seq_along(.)) {
+          if(is.na(.)[i] && i > 1) {
+            .[i] <- .[i-1]
+          }
+        }
+        .
+      }))
   }
 
   # Final log output
@@ -210,103 +295,72 @@ get_treasury_yield_data <- function(url, convert_to_decimal = TRUE, verbose = FA
     str(yield_data)
     log_info("First few rows of final data:")
     print(head(yield_data, 3))
-    log_info("Data range:", min(yield_data$Date, na.rm = TRUE), "to",
-             max(yield_data$Date, na.rm = TRUE))
+    log_info(sprintf("Data range: %s to %s",
+                     min(yield_data$Date, na.rm = TRUE),
+                     max(yield_data$Date, na.rm = TRUE)))
+    log_info(sprintf("Total observations: %d", nrow(yield_data)))
   }
 
   return(yield_data)
 }
 
-#' @title Get Historical and Current Treasury Yield Data
+
+#' @title Get Historical Treasury Yield Data from FRED
 #'
 #' @description
-#' Downloads and combines historical and current U.S. Treasury yield curve data.
+#' Downloads U.S. Treasury yield curve data from FRED API for a specified date range.
+#' This is a simplified wrapper around get_treasury_yield_data() for backward compatibility.
 #'
+#' @param api_key Character. FRED API key. If NULL, will look for fred_api_key environment variable.
 #' @param start_date Date or character in "YYYY-MM-DD" format. The earliest date to include.
+#'   If NULL, defaults to "1990-01-01".
 #' @param end_date Date or character in "YYYY-MM-DD" format. The latest date to include.
+#'   If NULL, defaults to current date.
 #' @param verbose Logical. If TRUE, print processing information.
 #'
 #' @return A data.frame with combined yield curve data.
 #'
+#' @details
+#' This function is equivalent to calling get_treasury_yield_data() with default maturities.
+#' It provides a simpler interface for users who just want all available maturities.
+#'
 #' @examples
 #' \dontrun{
+#' # Set your API key first
+#' Sys.setenv(fred_api_key = "your_api_key_here")
 #' yield_data <- get_treasury_yield_combined(start_date = "2018-01-01")
 #' head(yield_data)
 #' }
 #'
 #' @export
-get_treasury_yield_combined <- function(start_date = NULL, end_date = NULL, verbose = FALSE) {
-  # URLs for Treasury data sources
-  yc_url_1990_2024 <- "https://home.treasury.gov/system/files/276/yield-curve-rates-1990-2024.csv"
-  yc_url_2025 <- "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2025/all?type=daily_treasury_yield_curve&field_tdr_date_value=2025&page&_format=csv"
-
-  # Get historical data
-  if (verbose) cat("Downloading historical Treasury yield curve data...\n")
-  yield_curve_daily_hist <- get_treasury_yield_data(yc_url_1990_2024, verbose = verbose)
-
-  # Get current year data
-  if (verbose) cat("Downloading current year Treasury yield curve data...\n")
-  yield_curve_daily_current <- try(
-    get_treasury_yield_data(yc_url_2025, verbose = verbose),
-    silent = TRUE
-  )
-
-  # Combine data
-  if (verbose) cat("Combining data sets...\n")
-  if (inherits(yield_curve_daily_current, "try-error")) {
-    if (verbose) cat("Warning: Could not download current year data. Using only historical data.\n")
-    yield_data <- yield_curve_daily_hist
-  } else {
-    # Find common columns to ensure compatibility
-    common_cols <- intersect(
-      names(yield_curve_daily_hist),
-      names(yield_curve_daily_current)
-    )
-
-    # Ensure 'Date' is included
-    if (!"Date" %in% common_cols) {
-      stop("Date column missing from one or both data sets")
-    }
-
-    # Combine data sets
-    yield_data <- bind_rows(
-      yield_curve_daily_current[, common_cols],
-      yield_curve_daily_hist[, common_cols]
-    )
+get_treasury_yield_combined <- function(api_key = NULL,
+                                       start_date = NULL,
+                                       end_date = NULL,
+                                       verbose = FALSE) {
+  # Set defaults
+  if (is.null(start_date)) {
+    start_date <- "1990-01-01"
   }
 
-  # Filter by date range if specified
-  if (!is.null(start_date)) {
-    start_date <- as.Date(start_date)
-    yield_data <- yield_data[yield_data$Date >= start_date, ]
+  if (is.null(end_date)) {
+    end_date <- Sys.Date()
   }
 
-  if (!is.null(end_date)) {
-    end_date <- as.Date(end_date)
-    yield_data <- yield_data[yield_data$Date <= end_date, ]
-  }
-
-  # Fill missing values (can occur around weekends or holidays)
-  yield_data <- yield_data %>%
-    arrange(Date) %>%
-    mutate(across(where(is.numeric), ~ifelse(is.na(.), lag(.), .)))
-
-  # Clean up unused columns (uncommon maturities)
-  col_statistics <- sapply(yield_data[,-1], function(col) {
-    sum(!is.na(col)) / length(col)
-  })
-
-  # Remove columns with more than 50% missing values
-  cols_to_keep <- c("Date", names(col_statistics)[col_statistics > 0.5])
-  yield_data <- yield_data[, cols_to_keep]
-
-  # Final data summary
   if (verbose) {
-    cat("\nYield Data Summary:\n")
-    cat("Number of days:", nrow(yield_data), "\n")
-    cat("Date range:", min(yield_data$Date), "to", max(yield_data$Date), "\n")
-    cat("Maturities:", paste(names(yield_data)[-1], collapse = ", "), "\n\n")
+    cat(sprintf("Fetching Treasury yield data from FRED: %s to %s\n",
+                start_date, end_date))
   }
+
+  # Use the main function with all maturities
+  yield_data <- get_treasury_yield_data(
+    api_key = api_key,
+    maturities = c("1MO", "3MO", "6MO", "1", "2", "3", "5", "7", "10", "20", "30"),
+    start_date = start_date,
+    end_date = end_date,
+    convert_to_decimal = TRUE,
+    verbose = verbose,
+    fill_missing = TRUE
+  )
 
   return(yield_data)
 }

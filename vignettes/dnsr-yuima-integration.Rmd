@@ -28,6 +28,7 @@ This vignette introduces the advanced stochastic simulation capabilities of the 
 library(dnsr)
 # The package will automatically check if YUIMA is installed
 # install.packages("yuima") # Uncomment if needed
+# Set up FRED API key before running examples
 
 # Check if YUIMA is available for this vignette
 has_yuima <- requireNamespace("yuima", quietly = TRUE)

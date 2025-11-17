@@ -2,18 +2,23 @@
 % Please edit documentation in R/data-utils.r
 \name{get_treasury_yield_combined}
 \alias{get_treasury_yield_combined}
-\title{Get Historical and Current Treasury Yield Data}
+\title{Get Historical Treasury Yield Data from FRED}
 \usage{
 get_treasury_yield_combined(
+  api_key = NULL,
   start_date = NULL,
   end_date = NULL,
   verbose = FALSE
 )
 }
 \arguments{
-\item{start_date}{Date or character in "YYYY-MM-DD" format. The earliest date to include.}
+\item{api_key}{Character. FRED API key. If NULL, will look for fred_api_key environment variable.}
 
-\item{end_date}{Date or character in "YYYY-MM-DD" format. The latest date to include.}
+\item{start_date}{Date or character in "YYYY-MM-DD" format. The earliest date to include.
+If NULL, defaults to "1990-01-01".}
+
+\item{end_date}{Date or character in "YYYY-MM-DD" format. The latest date to include.
+If NULL, defaults to current date.}
 
 \item{verbose}{Logical. If TRUE, print processing information.}
 }
@@ -21,10 +26,17 @@ get_treasury_yield_combined(
 A data.frame with combined yield curve data.
 }
 \description{
-Downloads and combines historical and current U.S. Treasury yield curve data.
+Downloads U.S. Treasury yield curve data from FRED API for a specified date range.
+This is a simplified wrapper around get_treasury_yield_data() for backward compatibility.
+}
+\details{
+This function is equivalent to calling get_treasury_yield_data() with default maturities.
+It provides a simpler interface for users who just want all available maturities.
 }
 \examples{
 \dontrun{
+# Set your API key first
+Sys.setenv(fred_api_key = "your_api_key_here")
 yield_data <- get_treasury_yield_combined(start_date = "2018-01-01")
 head(yield_data)
 }

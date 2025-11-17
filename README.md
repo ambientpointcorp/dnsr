@@ -25,12 +25,30 @@ devtools::install_github("ambientpointcorp/dnsr")
 install.packages("yuima")
 ```
 
+## Setup
+
+Before using the package, you need a free FRED API key to download Treasury data:
+
+1. **Get a FRED API key**: Visit https://fred.stlouisfed.org/ and create a free account
+2. **Request an API key**: Go to https://fred.stlouisfed.org/docs/api/api_key.html
+3. **Set your key**:
+
+```r
+# Option 1: Set for current session
+Sys.setenv(fred_api_key = "your_api_key_here")
+
+# Option 2: Add to .Renviron for permanent setup
+usethis::edit_r_environ()
+# Add line: fred_api_key=your_api_key_here
+```
+
 ## Quick Start
 
 ```r
-library(dnsr)
+# Set FRED API key (do this once per session)
+Sys.setenv(fred_api_key = "your_api_key_here")
 
-# Download Treasury yield curve data
+library(dnsr)
 yield_data <- get_treasury_yield_combined(start_date = "2020-01-01")
 
 # Fit the DNS model

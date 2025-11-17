@@ -69,6 +69,9 @@ This dynamic extension allows for modeling the time evolution of yield curves an
 The first step is to download Treasury yield curve data. The `dnsr` package provides functions to download and process this data:
 
 ```{r get_data, eval=FALSE}
+# Set FRED API key first (do once per session)
+Sys.setenv(fred_api_key = "your_api_key_here")
+
 # Download recent Treasury yield curve data (last ~2 years)
 yield_data <- get_treasury_yield_combined(start_date = "2022-01-01")
 

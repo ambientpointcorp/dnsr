@@ -2,23 +2,33 @@
 % Please edit documentation in R/data-utils.r
 \name{get_treasury_yield_data}
 \alias{get_treasury_yield_data}
-\title{Treasury Yield Curve Data Utilities}
+\title{Get Treasury Yield Curve Data from FRED}
 \usage{
 get_treasury_yield_data(
-  url,
+  api_key = NULL,
+  maturities = c("1MO", "3MO", "6MO", "1", "2", "3", "5", "7", "10", "20", "30"),
+  start_date = NULL,
+  end_date = NULL,
   convert_to_decimal = TRUE,
   verbose = FALSE,
   fill_missing = TRUE
 )
 }
 \arguments{
-\item{url}{Character. URL for the Treasury yield curve data CSV file.}
+\item{api_key}{Character. FRED API key. If NULL, will look for fred_api_key environment variable.}
+
+\item{maturities}{Character vector. Maturities to download. Options include:
+"1MO", "3MO", "6MO", "1", "2", "3", "5", "7", "10", "20", "30"}
+
+\item{start_date}{Date or character in "YYYY-MM-DD" format. The earliest date to include.}
+
+\item{end_date}{Date or character in "YYYY-MM-DD" format. The latest date to include.}
 
 \item{convert_to_decimal}{Logical. If TRUE, convert yields from percentages to decimal format.}
 
 \item{verbose}{Logical. If TRUE, print processing information.}
 
-\item{fill_missing}{Logical. If TRUE, attempt to fill in missing values.}
+\item{fill_missing}{Logical. If TRUE, attempt to fill in missing values using forward fill.}
 }
 \value{
 A data.frame with processed yield curve data where:
@@ -29,19 +39,32 @@ A data.frame with processed yield curve data where:
 }
 }
 \description{
-Functions for downloading and processing U.S. Treasury yield curve data.
-
-Downloads U.S. Treasury yield curve data from the Treasury website and processes it into
-a consistent format suitable for DNS model calibration.
+Downloads U.S. Treasury yield curve data from FRED API for multiple maturities
+and processes it into a consistent format suitable for DNS model calibration.
 }
 \details{
-This function handles the inconsistencies in Treasury data formatting, cleans column names
-to represent maturities in years, and processes the data for DNS model fitting.
+This function fetches data from FRED for the following series:
+\itemize{
+\item DGS1MO (1-Month)
+\item DGS3MO (3-Month)
+\item DGS6MO (6-Month)
+\item DGS1 (1-Year)
+\item DGS2 (2-Year)
+\item DGS3 (3-Year)
+\item DGS5 (5-Year)
+\item DGS7 (7-Year)
+\item DGS10 (10-Year)
+\item DGS20 (20-Year)
+\item DGS30 (30-Year)
+}
+
+Requires a FRED API key which can be obtained free at https://fred.stlouisfed.org/docs/api/api_key.html
 }
 \examples{
 \dontrun{
-url <- "https://home.treasury.gov/system/files/276/yield-curve-rates-1990-2024.csv"
-yield_data <- get_treasury_yield_data(url)
+# Set your API key first
+Sys.setenv(fred_api_key = "your_api_key_here")
+yield_data <- get_treasury_yield_data(start_date = "2020-01-01")
 head(yield_data)
 }
 
