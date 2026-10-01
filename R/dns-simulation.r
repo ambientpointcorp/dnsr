@@ -740,13 +740,13 @@ estimate_dns_parameters_yuima <- function(factor_data, initial_params = NULL,
 
   var_names <- c("beta1", "beta2", "beta3")
 
-  # Create YUIMA model
+  # Create YUIMA model (parameter names are inferred from the drift and
+  # diffusion expressions; setModel() has no `parameter` argument)
   yuima_model <- yuima::setModel(
     drift = drift_terms,
     diffusion = diffusion_terms,
     state.variable = var_names,
-    solve.variable = var_names,
-    parameter = param_names
+    solve.variable = var_names
   )
 
   # Convert data to YUIMA format
@@ -764,10 +764,12 @@ estimate_dns_parameters_yuima <- function(factor_data, initial_params = NULL,
 
   # Estimate parameters
   if (estimation_method == "qmle") {
-    # Quasi-Maximum Likelihood Estimation
-    start_params <- param_values
-    lower_bounds <- c(rep(-Inf, 3), rep(0.001, 3), rep(0.0001, 3))  # Lower bounds for parameters
-    upper_bounds <- rep(Inf, 9)  # Upper bounds for parameters
+    # Quasi-Maximum Likelihood Estimation. yuima::qmle requires `start`
+    # (and any bounds) as named lists keyed by parameter name.
+    start_params <- as.list(param_values)
+    lower_bounds <- stats::setNames(
+      as.list(c(rep(-Inf, 3), rep(0.001, 3), rep(0.0001, 3))), param_names)
+    upper_bounds <- stats::setNames(as.list(rep(Inf, 9)), param_names)
 
     fit_result <- yuima::qmle(
       yuima_obj,
@@ -783,13 +785,18 @@ estimate_dns_parameters_yuima <- function(factor_data, initial_params = NULL,
     stop("Invalid estimation_method. Use 'qmle' or 'gmm'.")
   }
 
-  # Extract estimated parameters and convert back to DNS format
+  # Extract estimated parameters and convert back to DNS format.
+  # Index by name: yuima's coefficient ordering follows the model's
+  # internal parameter order, not the order the names were declared in.
   est_params <- fit_result@coef
 
-  # Convert back to DNS parameters
-  kappa <- est_params[4:6]  # b1, b2, b3
-  theta <- est_params[1:3] / kappa  # a1/b1, a2/b2, a3/b3
-  sigma <- est_params[7:9]  # s1, s2, s3
+  a_hat <- est_params[c("a1", "a2", "a3")]
+  kappa <- stats::setNames(est_params[c("b1", "b2", "b3")],
+                           c("kappa1", "kappa2", "kappa3"))
+  theta <- stats::setNames(a_hat / as.numeric(kappa),
+                           c("theta1", "theta2", "theta3"))
+  sigma <- stats::setNames(est_params[c("s1", "s2", "s3")],
+                           c("sigma1", "sigma2", "sigma3"))
 
   # Create result list
   result <- list(
