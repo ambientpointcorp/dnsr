@@ -350,18 +350,33 @@ get_calibrated_dns_params <- function(lookback_days = 60, lambda = NULL,
     warning("Limited DNS fitting results. Model parameters may not be reliable.")
   }
 
-  # Estimate factor dynamics if we have enough data
-  if (nrow(dns_result$parameters) >= 20) {
-    if (verbose) cat("Estimating factor dynamics...\n")
+  # Estimate factor dynamics on a MONTHLY (month-end) subsample of the
+  # factor series, per Diebold-Li. Daily cross-sectional refits carry
+  # measurement noise that is serially uncorrelated; estimating the OU
+  # regression on daily changes reads that noise as mean reversion and
+  # inflates kappa by an order of magnitude (errors-in-variables), which
+  # in turn makes fixed-step simulation of the resulting dynamics
+  # numerically unstable. Month-end sampling averages the noise down and
+  # recovers reversion speeds on the economically meaningful time scale.
+  pars <- dns_result$parameters[order(dns_result$parameters$Date), ]
+  month_key <- format(pars$Date, "%Y-%m")
+  monthly <- pars[!duplicated(month_key, fromLast = TRUE), ]
+  for (f in c("beta1", "beta2", "beta3")) {
+    monthly[[paste0(f, "_change")]] <- c(NA, diff(monthly[[f]]))
+  }
+
+  if (nrow(monthly) >= 20) {
+    if (verbose) cat("Estimating factor dynamics (monthly sampling)...\n")
     dynamics <- tryCatch({
-      estimate_dns_dynamics(dns_result$parameters)
+      estimate_dns_dynamics(monthly, dt = 1/12)
     }, error = function(e) {
       warning("Error estimating dynamics: ", e$message,
               ". Using default parameters.")
       NULL
     })
   } else {
-    if (verbose) cat("Not enough data for dynamics estimation. Using default values.\n")
+    if (verbose) cat("Fewer than 20 month-end observations; dynamics cannot be",
+                     "identified from this window. Using default values.\n")
     dynamics <- NULL
   }
 
