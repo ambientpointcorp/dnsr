@@ -172,6 +172,17 @@ get_treasury_yield_data <- function(api_key = NULL,
   checkmate::assert_logical(fill_missing, len = 1)
   checkmate::assert_character(maturities, min.len = 1)
 
+  # Resolve the API key once up front: a missing key is a configuration
+  # error, not a per-series fetch failure, and must not be swallowed by the
+  # per-maturity tryCatch below.
+  if (is.null(api_key)) {
+    api_key <- Sys.getenv("fred_api_key")
+    if (api_key == "") {
+      stop("FRED API key not found. Set fred_api_key environment variable ",
+           "or pass api_key parameter.")
+    }
+  }
+
   # Create informative logging function
   log_info <- function(...) {
     if (verbose) cat(..., "\n")

@@ -4,15 +4,31 @@
 \alias{estimate_dns_dynamics}
 \title{Dynamic Nelson-Siegel Model Dynamics}
 \usage{
-estimate_dns_dynamics(params_df, min_observations = 20, dt = 1/252)
+estimate_dns_dynamics(
+  params_df,
+  min_observations = 20,
+  dt = NULL,
+  sampling = c("monthly", "daily")
+)
 }
 \arguments{
 \item{params_df}{Data frame. The parameters data frame from fit_dns_model() containing
-columns for Date, beta1, beta2, beta3, and the corresponding change columns.}
+columns for Date, beta1, beta2, beta3. With \code{sampling = "daily"} the
+corresponding change columns are also required; with \code{sampling = "monthly"}
+they are recomputed internally on the month-end grid and need not be present.}
 
-\item{min_observations}{Integer. Minimum number of observations required for estimation.}
+\item{min_observations}{Integer. Minimum number of observations required for
+estimation, counted on the series the regression actually runs on (month-ends
+when \code{sampling = "monthly"}).}
 
-\item{dt}{Numeric. Time step in years. Default is 1/252 (daily data).}
+\item{dt}{Numeric. Time step in years of the series the regression runs on.
+Defaults to the sampling mode's spacing: 1/12 for \code{"monthly"}, 1/252 for
+\code{"daily"}. With \code{sampling = "monthly"} the step is month-end to
+month-end by construction, so a conflicting value is ignored with a warning.}
+
+\item{sampling}{Character. \code{"monthly"} (default) subsamples the factor
+series to its last observation per month before estimating; \code{"daily"}
+estimates on the series as given, preserving the pre-0.2.0 behavior.}
 }
 \value{
 A list containing:
@@ -28,7 +44,9 @@ A list containing:
 }
 \item correlation: Correlation matrix of factor innovations
 \item innovations: Matrix of factor innovations (residuals from mean reversion)
+\item innovation_dates: Date vector aligned with the rows of innovations
 \item estimation_period: Date range used for estimation
+\item sampling, dt: The sampling mode and time step actually used
 }
 }
 \description{
@@ -42,11 +60,21 @@ This function implements the estimation of an Ornstein-Uhlenbeck process for eac
 \deqn{d\beta(t) = \kappa(\theta - \beta(t))dt + \sigma dW(t)}
 The discretized version used for estimation is:
 \deqn{\Delta\beta(t) = \kappa(\theta - \beta(t-1))\Delta t + \sigma\epsilon(t)}
+
+The default month-end sampling follows Diebold-Li practice. Daily
+cross-sectional refits carry measurement noise that is serially
+uncorrelated; estimating the OU regression on daily changes reads that
+noise as mean reversion and inflates kappa by an order of magnitude
+(errors-in-variables), which in turn makes fixed-step simulation of the
+resulting dynamics numerically unstable. Month-end sampling averages the
+noise down and recovers reversion speeds on the economically meaningful
+time scale. Subsampling is idempotent: passing an already month-end
+series through \code{sampling = "monthly"} reproduces it unchanged.
 }
 \examples{
 \dontrun{
 yield_data <- get_treasury_yield_combined("2020-01-01")
-dns_result <- fit_dns_model(yield_data, n_days = 100)
+dns_result <- fit_dns_model(yield_data, n_days = 500)
 dynamics <- estimate_dns_dynamics(dns_result$parameters)
 }
 

@@ -52,9 +52,11 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
                          upper_bounds = c(0.2, 0.5, 0.5, 0.5),
                          optimizer = "L-BFGS-B") {
 
-  # Parameter validation
-  checkmate::assert_numeric(maturities, lower = 0, any.missing = FALSE)
-  checkmate::assert_numeric(yields, any.missing = FALSE)
+  # Parameter validation. Missing values are permitted here: observations
+  # with NA maturities or yields are filtered below, with a graceful
+  # success = FALSE result when fewer than 3 valid points remain.
+  checkmate::assert_numeric(maturities, lower = 0)
+  checkmate::assert_numeric(yields)
   checkmate::assert_numeric(initial_lambda, lower = 0.001, upper = 5, len = 1)
   checkmate::assert_choice(lambda_constraint, c("fixed", "constrained", "free"))
   checkmate::assert_numeric(lower_bounds, len = 4)

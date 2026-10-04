@@ -14,9 +14,19 @@
 #' based on historical factor time series.
 #'
 #' @param params_df Data frame. The parameters data frame from fit_dns_model() containing
-#'   columns for Date, beta1, beta2, beta3, and the corresponding change columns.
-#' @param min_observations Integer. Minimum number of observations required for estimation.
-#' @param dt Numeric. Time step in years. Default is 1/252 (daily data).
+#'   columns for Date, beta1, beta2, beta3. With \code{sampling = "daily"} the
+#'   corresponding change columns are also required; with \code{sampling = "monthly"}
+#'   they are recomputed internally on the month-end grid and need not be present.
+#' @param min_observations Integer. Minimum number of observations required for
+#'   estimation, counted on the series the regression actually runs on (month-ends
+#'   when \code{sampling = "monthly"}).
+#' @param dt Numeric. Time step in years of the series the regression runs on.
+#'   Defaults to the sampling mode's spacing: 1/12 for \code{"monthly"}, 1/252 for
+#'   \code{"daily"}. With \code{sampling = "monthly"} the step is month-end to
+#'   month-end by construction, so a conflicting value is ignored with a warning.
+#' @param sampling Character. \code{"monthly"} (default) subsamples the factor
+#'   series to its last observation per month before estimating; \code{"daily"}
+#'   estimates on the series as given, preserving the pre-0.2.0 behavior.
 #'
 #' @return A list containing:
 #'   - For each factor (beta1, beta2, beta3):
@@ -28,7 +38,9 @@
 #'     - summary: Basic statistics about the factor
 #'   - correlation: Correlation matrix of factor innovations
 #'   - innovations: Matrix of factor innovations (residuals from mean reversion)
+#'   - innovation_dates: Date vector aligned with the rows of innovations
 #'   - estimation_period: Date range used for estimation
+#'   - sampling, dt: The sampling mode and time step actually used
 #'
 #' @details
 #' This function implements the estimation of an Ornstein-Uhlenbeck process for each factor:
@@ -36,24 +48,54 @@
 #' The discretized version used for estimation is:
 #' \deqn{\Delta\beta(t) = \kappa(\theta - \beta(t-1))\Delta t + \sigma\epsilon(t)}
 #'
+#' The default month-end sampling follows Diebold-Li practice. Daily
+#' cross-sectional refits carry measurement noise that is serially
+#' uncorrelated; estimating the OU regression on daily changes reads that
+#' noise as mean reversion and inflates kappa by an order of magnitude
+#' (errors-in-variables), which in turn makes fixed-step simulation of the
+#' resulting dynamics numerically unstable. Month-end sampling averages the
+#' noise down and recovers reversion speeds on the economically meaningful
+#' time scale. Subsampling is idempotent: passing an already month-end
+#' series through \code{sampling = "monthly"} reproduces it unchanged.
+#'
 #' @examples
 #' \dontrun{
 #' yield_data <- get_treasury_yield_combined("2020-01-01")
-#' dns_result <- fit_dns_model(yield_data, n_days = 100)
+#' dns_result <- fit_dns_model(yield_data, n_days = 500)
 #' dynamics <- estimate_dns_dynamics(dns_result$parameters)
 #' }
 #'
 #' @export
-estimate_dns_dynamics <- function(params_df, min_observations = 20, dt = 1/252) {
+estimate_dns_dynamics <- function(params_df, min_observations = 20, dt = NULL,
+                                  sampling = c("monthly", "daily")) {
   # Validate inputs
+  sampling <- match.arg(sampling)
   checkmate::assert_data_frame(params_df)
-  checkmate::assert_subset(
-    c("Date", "beta1", "beta2", "beta3", "beta1_change", "beta2_change", "beta3_change"),
-    names(params_df)
-  )
+  checkmate::assert_subset(c("Date", "beta1", "beta2", "beta3"), names(params_df))
+  if (sampling == "daily") {
+    checkmate::assert_subset(
+      c("beta1_change", "beta2_change", "beta3_change"), names(params_df)
+    )
+  }
   checkmate::assert_class(params_df$Date, "Date")
-  checkmate::assert_numeric(dt, lower = 0, len = 1)
   checkmate::assert_numeric(min_observations, lower = 10, len = 1)
+
+  if (sampling == "monthly") {
+    if (!is.null(dt) && !isTRUE(all.equal(dt, 1 / 12))) {
+      warning("sampling = \"monthly\" estimates on month-end observations; ",
+              "ignoring dt = ", format(dt), " and using dt = 1/12.")
+    }
+    dt <- 1 / 12
+    params_df <- params_df[order(params_df$Date), ]
+    month_key <- format(params_df$Date, "%Y-%m")
+    params_df <- params_df[!duplicated(month_key, fromLast = TRUE), ]
+    for (f in c("beta1", "beta2", "beta3")) {
+      params_df[[paste0(f, "_change")]] <- c(NA, diff(params_df[[f]]))
+    }
+  } else if (is.null(dt)) {
+    dt <- 1 / 252
+  }
+  checkmate::assert_numeric(dt, lower = 0, len = 1)
 
   # Check if we have enough data
   if (nrow(params_df) < as.integer(min_observations)) {
@@ -168,6 +210,9 @@ estimate_dns_dynamics <- function(params_df, min_observations = 20, dt = 1/252) 
   # Add correlation to results
   dynamics$correlation <- cor_matrix
   dynamics$innovations <- innovations
+  dynamics$innovation_dates <- factors_df$Date
+  dynamics$sampling <- sampling
+  dynamics$dt <- dt
 
   # Analyze persistence of the model
   eigenvalues <- kappa_matrix_eigenvalues(dynamics)
@@ -350,25 +395,19 @@ get_calibrated_dns_params <- function(lookback_days = 60, lambda = NULL,
     warning("Limited DNS fitting results. Model parameters may not be reliable.")
   }
 
-  # Estimate factor dynamics on a MONTHLY (month-end) subsample of the
-  # factor series, per Diebold-Li. Daily cross-sectional refits carry
-  # measurement noise that is serially uncorrelated; estimating the OU
-  # regression on daily changes reads that noise as mean reversion and
-  # inflates kappa by an order of magnitude (errors-in-variables), which
-  # in turn makes fixed-step simulation of the resulting dynamics
-  # numerically unstable. Month-end sampling averages the noise down and
-  # recovers reversion speeds on the economically meaningful time scale.
-  pars <- dns_result$parameters[order(dns_result$parameters$Date), ]
-  month_key <- format(pars$Date, "%Y-%m")
-  monthly <- pars[!duplicated(month_key, fromLast = TRUE), ]
-  for (f in c("beta1", "beta2", "beta3")) {
-    monthly[[paste0(f, "_change")]] <- c(NA, diff(monthly[[f]]))
-  }
+  # Estimate factor dynamics. estimate_dns_dynamics() owns the sampling
+  # policy: its default monthly mode subsamples the factor series to
+  # month-ends and estimates at dt = 1/12 (see its documentation for why
+  # daily changes cannot be used directly). Windows with fewer than 20
+  # month-ends fall back to the documented default dynamics, which short
+  # samples cannot improve on.
+  pars <- dns_result$parameters
+  n_months <- length(unique(format(pars$Date, "%Y-%m")))
 
-  if (nrow(monthly) >= 20) {
+  if (n_months >= 20) {
     if (verbose) cat("Estimating factor dynamics (monthly sampling)...\n")
     dynamics <- tryCatch({
-      estimate_dns_dynamics(monthly, dt = 1/12)
+      estimate_dns_dynamics(pars, sampling = "monthly")
     }, error = function(e) {
       warning("Error estimating dynamics: ", e$message,
               ". Using default parameters.")
