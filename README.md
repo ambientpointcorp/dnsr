@@ -4,8 +4,6 @@
 
 The `dnsr` package provides a comprehensive implementation of the Dynamic Nelson-Siegel (DNS) model for yield curve modeling and analysis. It offers a complete workflow from data acquisition to model fitting, factor dynamics estimation, advanced stochastic simulation, and visualization.
 
-![Yield Curve Evolution](man/figures/yield_heatmap.png)
-
 ## Features
 
 - **Data Acquisition**: Download and process U.S. Treasury yield curve data
@@ -17,11 +15,13 @@ The `dnsr` package provides a comprehensive implementation of the Dynamic Nelson
 
 ## Installation
 
-```r
-# Install development version from GitHub
-devtools::install_github("ambientpointcorp/dnsr")
+`dnsr` is not on CRAN; install it from GitHub:
 
-# For advanced simulation capabilities, also install YUIMA
+```r
+# install.packages("remotes")
+remotes::install_github("ambientpointcorp/dnsr")
+
+# For the SDE simulation paths, also install YUIMA (a Suggests dependency)
 install.packages("yuima")
 ```
 
@@ -60,6 +60,8 @@ factor_plots <- plot_factor_time_series(dns_result)
 print(factor_plots$factors)
 
 # Estimate factor dynamics
+# (month-end sampling by default since 0.2.0; use sampling = "daily" for the
+#  0.1.0 behavior)
 dynamics <- estimate_dns_dynamics(dns_result$parameters)
 
 # Simulate future yield curves with advanced SDE methods (requires YUIMA)
@@ -115,16 +117,19 @@ $$d\beta_i(t) = \kappa_i(\theta_i - \beta_i(t))dt + \sigma_i dW_i(t)$$
 
 ## Visualizations
 
-The package includes advanced visualization capabilities:
+Each plotting function returns `ggplot` objects (or a named list of them), so
+output can be themed, combined, or saved by the caller:
 
-### 3D Yield Surface
-![3D Yield Surface](man/figures/yield_surface.png)
-
-### Factor Loadings
-![DNS Factor Loadings](man/figures/factor_loadings.png)
-
-### Principal Component Analysis
-![PCA Analysis](man/figures/pca_components.png)
+| Function | Shows |
+| :--- | :--- |
+| `plot_yield_curves()` | Fitted curves against observed yields, with RMSE |
+| `plot_dns_loadings()` | Level, slope, and curvature loadings against maturity |
+| `plot_factor_time_series()` | Estimated factors over time, optionally as changes |
+| `plot_yield_surface()` | Yield surface across maturity and time |
+| `plot_yield_heatmap()` | Yield evolution as a maturity-by-time heatmap |
+| `plot_yield_pca()` | Principal components of the yield panel |
+| `plot_simulated_factors()` | Simulated factor paths |
+| `plot_simulated_yields()` | Simulated curves at selected horizons |
 
 ## Documentation
 
@@ -136,6 +141,9 @@ vignette("dns-model-introduction", package = "dnsr")
 
 # Advanced simulation with YUIMA integration
 vignette("dnsr-yuima-integration", package = "dnsr")
+
+# Obtaining and configuring a FRED API key
+vignette("fred-api-setup", package = "dnsr")
 ```
 
 ## Applications
@@ -156,12 +164,21 @@ If you use `dnsr` in your research, please cite:
 @Manual{,
   title = {dnsr: Dynamic Nelson-Siegel Model in R},
   author = {Ariel R. H.},
-  year = {2025},
-  note = {R package version 0.1.0},
+  year = {2026},
+  note = {R package version 0.2.0},
   url = {https://github.com/ambientpointcorp/dnsr},
 }
 ```
 
+## Related
+
+- [`oasr`](https://github.com/ambientpointcorp/oasr) — option-adjusted spread
+  analysis; consumes `dnsr` rate paths for cashflow projection and OAS.
+- *Monte Carlo Fair Value Analysis for Loan Pools* — develops the DNS theory
+  this package implements, from the Nelson-Siegel decomposition through SDE
+  simulation. Its worked examples run on `dnsr`; the chapter code is at
+  [mc-fair-value-book](https://github.com/ambientpointcorp/mc-fair-value-book).
+
 ## License
 
-MIT © Ambient Point Corp.
+MIT © Ambient Point Corp. See `LICENSE` for the full text.
