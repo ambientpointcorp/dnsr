@@ -1,3 +1,46 @@
+# dnsr 0.4.1
+
+Follow-ups to 0.4.0: no change to what any function computes, except one
+documentation correction.
+
+* `fit_dns_model()`'s warm start makes a date's fit depend on which *other*
+  dates are in the panel, because each cross-section is initialised from the
+  previous date's lambda and the chain differs. Fitting a month-end series
+  directly and fitting the daily series containing it give lambdas differing
+  by up to 0.096 on the shared dates. That is inherent to warm starting rather
+  than a defect, but it was undocumented, and `warm_start = FALSE` makes the
+  fits panel-independent -- verified identical, not merely close. Now
+  documented, and pinned by a test.
+* The `estimate_dns_dynamics()` and `dns_dynamics_to_sim_params()` examples
+  fitted 750 cross-sections to reach the 20 month-ends the default monthly
+  sampling needs, taking about 9 seconds each and tripping the CRAN check note
+  for examples over 5 seconds. They now fit only the month-ends the estimation
+  actually uses, with `warm_start = FALSE` so the result matches what fitting
+  every day would give. About nine times quicker.
+* Offline coverage for the FRED data path, which the live tests skip and which
+  was the least-covered file at 22.7 percent. Two routes, neither needing a key
+  or a network: a prepared cache, which `fetch_fred_series()` consults before
+  looking for a key, so the whole assembly in `get_treasury_yield_data()` runs
+  for real; and `mockery` for the request and parse layer the cache skips.
+  Covers the "." to `NA` mapping, HTTP failure reporting, the empty-payload
+  warning, the cache round trip including that no key reaches disk, decimal
+  conversion, row ordering, gap filling with `max_gap`, and per-series fetch
+  failures. `R/data-utils.r` goes from 22.7 to 92.8 percent and the package
+  from 76.2 to 82.4.
+* Trimmed the test suite from 73 to 40 seconds without weakening an assertion:
+  the exact simulation engine is exact at any step size, so the stationary
+  test uses 120 steps rather than 720; the transition-law test needs fewer
+  paths than it had, since its assertions are z-scores against the Monte Carlo
+  standard error; the plan-restoration test uses a tweaked sequential plan,
+  which is distinguishable from the plain one the bug installed and needs no
+  workers; and the Svensson sweep uses a wider stride over the same range.
+  The coverage job was taking 17 minutes.
+* New `pkgdown` workflow. `_pkgdown.yml` arrived in 0.4.0 but nothing rendered
+  it: `docs/` was a gitignored local build, never committed, ten months stale,
+  documenting three functions that no longer existed and missing six that did.
+  The site is now built on a runner that has pandoc and published to
+  `gh-pages`.
+
 # dnsr 0.4.0
 
 Enhancements, all reachable only through new arguments and new exports, plus

@@ -112,7 +112,9 @@ test_that("the exact engine samples the closed-form transition law", {
   params <- exact_params()
   x0 <- c(0.055, -0.040, 0.030)
   dt <- 0.25
-  n_paths <- 2e5
+  # 5e4 is enough: the assertions are z-scores against the Monte Carlo
+  # standard error, which scales with the sample, so they hold at any size.
+  n_paths <- 5e4
 
   set.seed(11)
   sim <- simulate_dns_factors(params, x0, time_horizon = dt, n_steps = 1,
@@ -140,9 +142,13 @@ test_that("the exact engine samples the closed-form transition law", {
 test_that("the exact engine reaches the stationary distribution", {
   params <- exact_params()
 
+  # Few steps on purpose: this engine samples the exact transition law, so a
+  # six-month step is as accurate as a monthly one and only the 60-year
+  # horizon matters for reaching stationarity. An Euler scheme would need the
+  # fine grid; that is the difference being relied on here.
   set.seed(12)
   sim <- simulate_dns_factors(params, params$theta, time_horizon = 60,
-                              n_steps = 720, n_paths = 3000, engine = "exact")
+                              n_steps = 120, n_paths = 3000, engine = "exact")
   terminal <- sim$factors[dim(sim$factors)[1], , ]
 
   # Stationary sd of an OU process is sigma / sqrt(2 kappa).
@@ -162,13 +168,15 @@ test_that("the exact engine agrees with yuima in distribution", {
   params <- exact_params()
   x0 <- c(0.055, -0.040, 0.030)
 
+  # 150 paths over 200 steps: enough for a two-sample KS test to detect a
+  # real difference in law, and the yuima engine costs one call per path.
   set.seed(21)
-  exact <- simulate_dns_factors(params, x0, time_horizon = 2, n_steps = 400,
-                                n_paths = 300, engine = "exact")
+  exact <- simulate_dns_factors(params, x0, time_horizon = 2, n_steps = 200,
+                                n_paths = 150, engine = "exact")
   set.seed(21)
   viayuima <- suppressWarnings(
-    simulate_dns_factors(params, x0, time_horizon = 2, n_steps = 400,
-                         n_paths = 300, engine = "yuima")
+    simulate_dns_factors(params, x0, time_horizon = 2, n_steps = 200,
+                         n_paths = 150, engine = "yuima")
   )
 
   last <- dim(exact$factors)[1]

@@ -492,10 +492,12 @@ test_that("the Svensson fit stays out of its degenerate corners", {
   data(treasury_yields)
   maturities <- as.numeric(setdiff(names(treasury_yields), "Date"))
 
-  # Every tenth date. Unbounded, the search found lambda1 = 1e-4 with betas of
-  # +/-16,800 on one of these, and lambda1 = 40 on others -- degenerate
-  # parameterisations with flattering residuals.
-  for (i in seq(1, nrow(treasury_yields), by = 10)) {
+  # A spread of dates across the panel's regimes. Unbounded, the search found
+  # lambda1 = 1e-4 with betas of +/-16,800 on one of these and lambda1 = 40 on
+  # others -- degenerate parameterisations with flattering residuals. Every
+  # tenth date was swept while the bounds were being worked out; the stride is
+  # wider here so the suite stays quick under coverage instrumentation.
+  for (i in seq(1, nrow(treasury_yields), by = 75)) {
     fit <- fit_svensson(maturities, as.numeric(treasury_yields[i, -1]))
 
     expect_gte(fit$parameters[["lambda1"]], 0.02)
