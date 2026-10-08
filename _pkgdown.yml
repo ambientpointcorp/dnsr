@@ -1,0 +1,66 @@
+url: https://ambientpointcorp.github.io/dnsr
+
+template:
+  bootstrap: 5
+
+reference:
+  - title: Treasury data
+    desc: Fetch and assemble yield curve panels from FRED.
+    contents:
+      - fetch_fred_series
+      - get_treasury_yield_data
+      - get_treasury_yield_combined
+
+  - title: Cross-sectional fitting
+    desc: Fit the Nelson-Siegel curve to one date, or to a panel of dates.
+    contents:
+      - fit_ns_model
+      - fit_dns_model
+      - compare_term_structure_models
+
+  - title: Factor dynamics
+    desc: Estimate the Ornstein-Uhlenbeck dynamics of the fitted factors.
+    contents:
+      - estimate_dns_dynamics
+      - dns_dynamics_to_sim_params
+      - get_calibrated_dns_params
+      - estimate_dns_parameters_yuima
+
+  - title: Simulation
+    desc: Project factors forward and convert them to curves.
+    contents:
+      - simulate_dns_factors
+      - simulate_dns_yield_curves
+      - calculate_dns_yields
+      - calculate_dns_forwards
+      - dns_to_yuima_model
+
+  - title: Pricing
+    desc: Discount factors, zero prices and par yields off a fitted curve.
+    contents:
+      - dns_discount_factors
+      - dns_zero_prices
+      - dns_par_yields
+
+  - title: Data
+    contents:
+      - treasury_yields
+
+  - title: Visualization
+    contents:
+      - plot_yield_curves
+      - plot_dns_loadings
+      - plot_factor_time_series
+      - plot_yield_heatmap
+      - plot_yield_surface
+      - plot_yield_pca
+      - plot_simulated_factors
+      - plot_simulated_yields
+
+articles:
+  - title: Guides
+    navbar: ~
+    contents:
+      - dns-model-introduction
+      - dnsr-yuima-integration
+      - fred-api-setup
