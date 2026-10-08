@@ -11,8 +11,9 @@ test_that("fit_ns_model handles simple yield curve correctly", {
   
   # Check result structure
   expect_type(result, "list")
-  expect_named(result, c("parameters", "fitted_yields", "rmse", "maturities", 
-                        "actual_yields", "residuals", "success"))
+  expect_true(all(c("parameters", "fitted_yields", "rmse", "maturities",
+                    "actual_yields", "residuals", "success", "valid_idx",
+                    "at_bound") %in% names(result)))
   
   # Check parameters
   expect_length(result$parameters, 4)
@@ -42,8 +43,9 @@ test_that("fit_ns_model handles missing values correctly", {
   
   # Check result structure
   expect_type(result, "list")
-  expect_named(result, c("parameters", "fitted_yields", "rmse", "maturities", 
-                        "actual_yields", "residuals", "success"))
+  expect_true(all(c("parameters", "fitted_yields", "rmse", "maturities",
+                    "actual_yields", "residuals", "success", "valid_idx",
+                    "at_bound") %in% names(result)))
   
   # Check that maturities with missing yields are excluded from fitted values
   valid_idx <- !is.na(yields)
@@ -80,11 +82,13 @@ test_that("fit_ns_model handles extreme yield curves gracefully", {
   
   # Fit Nelson-Siegel model
   result <- fit_ns_model(maturities, yields)
+  expect_false(any(result$at_bound))
   
   # Check result structure
   expect_type(result, "list")
-  expect_named(result, c("parameters", "fitted_yields", "rmse", "maturities", 
-                        "actual_yields", "residuals", "success"))
+  expect_true(all(c("parameters", "fitted_yields", "rmse", "maturities",
+                    "actual_yields", "residuals", "success", "valid_idx",
+                    "at_bound") %in% names(result)))
   
   # Check parameters - beta2 should be positive for an inverted curve: the
   # slope loading (1 - exp(-lambda*m)) / (lambda*m) is 1 at the short end
@@ -92,11 +96,17 @@ test_that("fit_ns_model handles extreme yield curves gracefully", {
   # inverted curve (short above long) needs beta2 > 0.
   expect_gt(result$parameters["beta2"], 0)
   
-  # Create another extreme case - humped yield curve
+  # Create another extreme case - humped yield curve. This hump is sharp enough
+  # that the fit wants a faster decay than the default lambda ceiling of 0.5
+  # allows, so it comes to rest there. L-BFGS-B reports convergence at a bound,
+  # so the fit says so explicitly instead of returning an unqualified success.
   yields_humped <- c(0.01, 0.015, 0.02, 0.025, 0.028, 0.026, 0.024, 0.023, 0.022, 0.021)
   
   # Fit Nelson-Siegel model
-  result_humped <- fit_ns_model(maturities, yields_humped)
+  expect_warning(result_humped <- fit_ns_model(maturities, yields_humped),
+                 "rests on a parameter bound")
+  expect_true(result_humped$at_bound[["lambda"]])
+  expect_equal(unname(result_humped$parameters["lambda"]), 0.5)
   
   # Check parameters - beta3 should be non-zero for humped curve
   expect_true(abs(result_humped$parameters["beta3"]) > 0.005)
@@ -127,7 +137,8 @@ test_that("fit_dns_model handles time series data correctly", {
   
   # Check result structure
   expect_type(dns_result, "list")
-  expect_named(dns_result, c("parameters", "fitted_yields", "maturities", "success_rate"))
+  expect_true(all(c("parameters", "fitted_yields", "maturities", "success_rate",
+                    "failures") %in% names(dns_result)))
   
   # Check parameters data frame
   expect_s3_class(dns_result$parameters, "data.frame")

@@ -1,0 +1,458 @@
+# Tests for the 0.4.0 enhancements, and for the lagged-level regression fix in
+# estimate_dns_dynamics().
+
+ns_curve <- function(maturities, betas, lambda) {
+  l2 <- (1 - exp(-lambda * maturities)) / (lambda * maturities)
+  l3 <- l2 - exp(-lambda * maturities)
+  betas[1] + betas[2] * l2 + betas[3] * l3
+}
+
+# An OU system simulated at a stated step, returned in the shape
+# estimate_dns_dynamics() expects.
+ou_panel <- function(n, kappa, theta, sigma, dt, seed = 1, by = "month") {
+  set.seed(seed)
+  k_is_matrix <- is.matrix(kappa)
+  b <- matrix(NA_real_, n, 3)
+  b[1, ] <- theta
+  for (i in 2:n) {
+    pull <- if (k_is_matrix) {
+      as.numeric(kappa %*% (theta - b[i - 1, ]))
+    } else {
+      kappa * (theta - b[i - 1, ])
+    }
+    b[i, ] <- b[i - 1, ] + pull * dt + sigma * sqrt(dt) * stats::rnorm(3)
+  }
+  out <- data.frame(
+    Date = seq(as.Date("1960-01-28"), by = by, length.out = n),
+    beta1 = b[, 1], beta2 = b[, 2], beta3 = b[, 3]
+  )
+  for (f in c("beta1", "beta2", "beta3")) {
+    out[[paste0(f, "_change")]] <- c(NA, diff(out[[f]]))
+  }
+  out
+}
+
+
+# ---- the OU regression uses the lagged level ---------------------------------
+
+test_that("the OU regression is on the lagged level, giving a negative slope", {
+  panel <- ou_panel(600, kappa = c(0.8, 1.5, 2.5), theta = c(0.04, -0.02, 0.01),
+                    sigma = c(0.01, 0.014, 0.03), dt = 1 / 12)
+
+  dynamics <- estimate_dns_dynamics(panel, sampling = "monthly")
+
+  for (f in c("beta1", "beta2", "beta3")) {
+    # b = -kappa * dt, so a mean-reverting series must give a negative slope.
+    # Regressing on the contemporaneous level puts beta(t) on both sides and
+    # returns +(1 - phi) instead, which made kappa come out negative and get
+    # rescued by abs().
+    expect_lt(stats::coef(dynamics[[f]]$model)[[2]], 0)
+    expect_gt(dynamics[[f]]$kappa, 0)
+  }
+
+  # theta now comes from -a/b rather than always falling back to the sample
+  # mean, which is what happened while the slope's sign was inverted.
+  for (f in c("beta1", "beta2", "beta3")) {
+    model <- dynamics[[f]]$model
+    expect_equal(
+      dynamics[[f]]$theta,
+      -stats::coef(model)[[1]] / stats::coef(model)[[2]]
+    )
+  }
+
+  # The lagged level is the contemporaneous level minus the change.
+  reg_levels <- stats::model.frame(dynamics$beta1$model)$factor_level
+  expect_false(anyNA(reg_levels))
+})
+
+test_that("a series with no mean reversion is reported, not silently flipped", {
+  # A pure random walk: no reversion to find.
+  set.seed(7)
+  n <- 400
+  walk <- cumsum(stats::rnorm(n, 0, 0.01)) + 0.04
+  panel <- data.frame(Date = seq(as.Date("1960-01-28"), by = "month",
+                                 length.out = n),
+                      beta1 = walk, beta2 = walk, beta3 = walk)
+  for (f in c("beta1", "beta2", "beta3")) {
+    panel[[paste0(f, "_change")]] <- c(NA, diff(panel[[f]]))
+  }
+
+  # Whether this particular sample shows a positive or negative slope is luck;
+  # what matters is that a non-reverting estimate warns rather than being
+  # turned positive in silence.
+  warnings_seen <- character(0)
+  dynamics <- withCallingHandlers(
+    estimate_dns_dynamics(panel, sampling = "monthly"),
+    warning = function(w) {
+      warnings_seen <<- c(warnings_seen, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+
+  if (dynamics$beta1$kappa <= 0.002) {
+    expect_true(any(grepl("No mean reversion detected", warnings_seen)))
+  }
+  expect_true(all(vapply(c("beta1", "beta2", "beta3"),
+                         function(f) dynamics[[f]]$kappa > 0, logical(1))))
+})
+
+
+# ---- E-02 --------------------------------------------------------------------
+
+test_that("the profiled fit is the exact least-squares solution at fixed lambda", {
+  maturities <- c(0.25, 1, 2, 5, 10, 30)
+  yields <- ns_curve(maturities, c(0.045, -0.02, 0.01), 0.3) +
+    c(1, -1, 1, -1, 1, -1) * 2e-4
+
+  fit <- fit_ns_model(maturities, yields, lambda_constraint = "fixed",
+                      initial_lambda = 0.0609, method = "profile")
+
+  l2 <- (1 - exp(-0.0609 * maturities)) / (0.0609 * maturities)
+  l3 <- l2 - exp(-0.0609 * maturities)
+  reference <- stats::coef(stats::lm(yields ~ l2 + l3))
+
+  expect_equal(unname(fit$parameters[1:3]), unname(reference))
+  expect_equal(fit$parameters[["lambda"]], 0.0609)
+})
+
+test_that("the profiled fit recovers a synthetic curve far more closely", {
+  maturities <- c(0.25, 1, 2, 5, 10, 30)
+  truth <- c(0.045, -0.02, 0.01)
+  yields <- ns_curve(maturities, truth, 0.3)
+
+  profiled <- fit_ns_model(maturities, yields, method = "profile")
+  numeric_fit <- fit_ns_model(maturities, yields, method = "optim")
+
+  # The curve is exactly Nelson-Siegel, so an exact solver should essentially
+  # reproduce it.
+  expect_equal(profiled$parameters[["lambda"]], 0.3, tolerance = 1e-3)
+  expect_equal(unname(profiled$parameters[1:3]), truth, tolerance = 1e-4)
+  expect_lt(profiled$rmse, 1e-8)
+  expect_lt(profiled$rmse, numeric_fit$rmse)
+})
+
+test_that("the profiled fit reports a lambda resting on its bound", {
+  maturities <- c(0.25, 1, 2, 5, 10, 30)
+  # Generated with a decay well above the default ceiling of 0.5.
+  yields <- ns_curve(maturities, c(0.045, -0.02, 0.03), 1.2)
+
+  expect_warning(
+    clamped <- fit_ns_model(maturities, yields, method = "profile"),
+    "rests on a parameter bound"
+  )
+  expect_true(clamped$at_bound[["lambda"]])
+  expect_equal(clamped$parameters[["lambda"]], 0.5, tolerance = 1e-5)
+
+  # Given room, it finds the interior optimum and reports no bound.
+  free <- fit_ns_model(maturities, yields, method = "profile",
+                       lower_bounds = c(-1, -1, -1, 0.01),
+                       upper_bounds = c(1, 1, 1, 5))
+  expect_false(any(free$at_bound))
+  expect_equal(free$parameters[["lambda"]], 1.2, tolerance = 1e-3)
+})
+
+test_that("fit_dns_model reports bound hits once for the whole panel", {
+  maturities <- c(0.25, 1, 2, 5, 10, 30)
+  dates <- seq(as.Date("2023-01-02"), by = "day", length.out = 12)
+  panel <- data.frame(Date = dates)
+  for (k in seq_along(maturities)) {
+    panel[[as.character(maturities[k])]] <-
+      ns_curve(maturities[k], c(0.045, -0.02, 0.03), 1.2) +
+      1e-4 * seq_along(dates)
+  }
+
+  # One warning naming the count, not one per date.
+  expect_warning(
+    fit <- fit_dns_model(panel, n_days = 12, show_progress = FALSE,
+                         method = "profile"),
+    "rest on a bound in some fits"
+  )
+  expect_true(is.matrix(fit$at_bound))
+  expect_equal(nrow(fit$at_bound), nrow(fit$parameters))
+  expect_true(all(fit$at_bound[, "lambda"]))
+
+  # parameters stays numeric apart from Date, so coercion still works.
+  numeric_cols <- setdiff(names(fit$parameters), "Date")
+  expect_true(all(vapply(fit$parameters[numeric_cols], is.numeric, logical(1))))
+})
+
+
+# ---- E-03 --------------------------------------------------------------------
+
+test_that("the full structure recovers a known mean-reversion matrix", {
+  kappa <- matrix(c(0.80, -0.30, 0.10,
+                    -0.20, 1.20, 0.25,
+                    0.05, -0.15, 2.00), 3, 3, byrow = TRUE)
+  theta <- c(0.040, -0.015, 0.008)
+  panel <- ou_panel(1200, kappa = kappa, theta = theta,
+                    sigma = c(0.010, 0.014, 0.030), dt = 1 / 12, seed = 4)
+
+  dynamics <- estimate_dns_dynamics(panel, structure = "full",
+                                    sampling = "monthly")
+
+  expect_equal(dynamics$structure, "full")
+  expect_equal(dim(dynamics$kappa_matrix), c(3L, 3L))
+  expect_lt(max(abs(dynamics$kappa_matrix - kappa)), 0.6)
+  # Compared on an absolute scale: theta3 is 0.008, so a relative tolerance
+  # would demand far more precision of it than of theta1.
+  expect_lt(max(abs(unname(dynamics$theta_vector) - theta)), 0.004)
+
+  # The true system is stable, so every eigenvalue has a positive real part.
+  expect_true(all(Re(dynamics$eigenvalues) > 0))
+  expect_true(dynamics$system_stability)
+
+  # Per-factor entries carry the diagonal, so the object still feeds the
+  # simulator.
+  expect_equal(
+    c(dynamics$beta1$kappa, dynamics$beta2$kappa, dynamics$beta3$kappa),
+    diag(dynamics$kappa_matrix), ignore_attr = TRUE
+  )
+  sim_params <- dns_dynamics_to_sim_params(dynamics)
+  expect_equal(sim_params$kappa, diag(dynamics$kappa_matrix),
+               ignore_attr = TRUE)
+  expect_equal(sim_params$kappa_matrix, dynamics$kappa_matrix)
+})
+
+test_that("the diagonal structure stays diagonal and is the default", {
+  panel <- ou_panel(400, kappa = c(0.8, 1.5, 2.5), theta = c(0.04, -0.02, 0.01),
+                    sigma = c(0.01, 0.014, 0.03), dt = 1 / 12)
+
+  dynamics <- estimate_dns_dynamics(panel)
+  expect_equal(dynamics$structure, "diagonal")
+  expect_true(all(dynamics$kappa_matrix[upper.tri(dynamics$kappa_matrix)] == 0))
+  expect_true(all(dynamics$kappa_matrix[lower.tri(dynamics$kappa_matrix)] == 0))
+
+  # Eigenvalues of a diagonal matrix are its diagonal.
+  expect_setequal(Re(dynamics$eigenvalues), diag(dynamics$kappa_matrix))
+
+  # Each factor's own regression has one regressor.
+  expect_length(stats::coef(dynamics$beta1$model), 2)
+})
+
+
+# ---- E-04 --------------------------------------------------------------------
+
+test_that("standard errors follow from the fitted regression", {
+  panel <- ou_panel(500, kappa = c(0.8, 1.5, 2.5), theta = c(0.04, -0.02, 0.01),
+                    sigma = c(0.01, 0.014, 0.03), dt = 1 / 12)
+  dynamics <- estimate_dns_dynamics(panel, sampling = "monthly")
+  dt <- dynamics$dt
+
+  for (f in c("beta1", "beta2", "beta3")) {
+    fac <- dynamics[[f]]
+    vc <- stats::vcov(fac$model)
+
+    # kappa = -b/dt, a linear rescaling, so its standard error rescales too.
+    expect_equal(fac$se[["kappa"]], sqrt(vc[2, 2]) / dt)
+    expect_true(is.finite(fac$se[["theta"]]))
+    expect_equal(fac$se[["sigma"]],
+                 fac$sigma / sqrt(stats::df.residual(fac$model)* 2))
+    expect_equal(fac$t_value[["kappa"]], fac$kappa / fac$se[["kappa"]])
+
+    # The half-life interval brackets the point estimate.
+    expect_lte(fac$half_life_ci[["lower"]], fac$half_life_years)
+    expect_gte(fac$half_life_ci[["upper"]], fac$half_life_years)
+  }
+})
+
+
+# ---- E-05 --------------------------------------------------------------------
+
+test_that("classes are additive and the lists still behave as lists", {
+  data(treasury_yields)
+  # The recent curve wants a faster decay than the default lambda ceiling, so
+  # some of these fits sit on it; that is reported and is not what this test is
+  # about.
+  fit <- suppressWarnings(
+    fit_dns_model(treasury_yields, n_days = 40, show_progress = FALSE)
+  )
+
+  expect_s3_class(fit, "dns_fit")
+  expect_true(is.list(fit))
+  expect_true(inherits(fit, "list"))
+
+  # Every element is reachable under the name it always had.
+  for (nm in c("parameters", "fitted_yields", "maturities", "success_rate")) {
+    expect_false(is.null(fit[[nm]]))
+  }
+  expect_silent(checkmate::assert_list(fit))
+
+  # Functions that validate on names still accept it.
+  expect_s3_class(plot_factor_time_series(fit)$factors, "ggplot")
+
+  # print and summary return their input invisibly.
+  expect_output(print(fit), "Dynamic Nelson-Siegel fit")
+  expect_s3_class(summary(fit), "summary.dns_fit")
+  expect_output(print(summary(fit)), "Fit error")
+
+  curve <- fit_ns_model(c(0.25, 1, 2, 5, 10, 30),
+                        ns_curve(c(0.25, 1, 2, 5, 10, 30),
+                                 c(0.045, -0.02, 0.01), 0.3))
+  expect_s3_class(curve, "ns_fit")
+  expect_output(print(curve), "Nelson-Siegel curve fit")
+
+  params <- list(kappa = c(0.5, 1, 2), theta = c(0.04, -0.02, 0.01),
+                 sigma = c(0.005, 0.01, 0.02))
+  sim <- simulate_dns_factors(params, c(0.05, -0.01, 0.01), n_steps = 10,
+                              n_paths = 5, engine = "exact", seed = 1)
+  expect_s3_class(sim, "dns_simulation")
+  expect_output(print(sim), "DNS simulation")
+})
+
+
+# ---- E-06 --------------------------------------------------------------------
+
+test_that("discount factors are the discounted DNS curve", {
+  maturities <- c(0.25, 1, 2, 5, 10, 30)
+  factors <- matrix(c(0.045, -0.02, 0.01), nrow = 1)
+
+  discount <- dns_discount_factors(factors, maturities, 0.3)
+  yields <- calculate_dns_yields(factors, maturities, 0.3)
+
+  expect_equal(as.numeric(discount), as.numeric(exp(-yields * maturities)))
+  expect_equal(dns_discount_factors(factors, 0, 0.3)[1, 1], 1)
+  expect_true(all(diff(as.numeric(discount)) < 0))
+
+  # Zero prices are the discount factors times face.
+  expect_equal(dns_zero_prices(factors, maturities, 0.3),
+               100 * discount)
+  expect_equal(dns_zero_prices(factors, maturities, 0.3, face = 1), discount)
+
+  # Shapes follow calculate_dns_yields.
+  paths <- array(rep(c(0.045, -0.02, 0.01), each = 12), dim = c(4, 3, 3))
+  expect_equal(dim(dns_discount_factors(paths, maturities, 0.3)),
+               c(4L, length(maturities), 3L))
+})
+
+test_that("par yields price their bond at par", {
+  maturities <- c(0.5, 1, 2, 5, 10, 30)
+  factors <- matrix(c(0.045, -0.02, 0.01), nrow = 1)
+  lambda <- 0.3
+
+  par <- dns_par_yields(factors, maturities, lambda)
+
+  for (k in seq_along(maturities)) {
+    horizon <- maturities[k]
+    coupon_dates <- seq_len(horizon * 2) / 2
+    discount <- as.numeric(dns_discount_factors(factors, coupon_dates, lambda))
+
+    # Coupons plus redemption, per unit of face.
+    price <- sum(par[1, k] / 2 * discount) + utils::tail(discount, 1)
+    expect_equal(price, 1, tolerance = 1e-12)
+  }
+})
+
+test_that("par yields are undefined below one coupon period", {
+  factors <- matrix(c(0.045, -0.02, 0.01), nrow = 1)
+
+  expect_warning(
+    par <- dns_par_yields(factors, c(0.0833, 0.25, 1), 0.3),
+    "not a whole number"
+  )
+  expect_true(all(is.na(par[1, 1:2])))
+  expect_false(is.na(par[1, 3]))
+
+  # A quarterly bond makes a 3-month maturity well defined.
+  expect_silent(dns_par_yields(factors, c(0.25, 1), 0.3, frequency = 4))
+
+  # Every maturity undefined: all NA, still the right shape.
+  expect_warning(none <- dns_par_yields(factors, c(0.0833, 0.25), 0.3))
+  expect_true(all(is.na(none)))
+  expect_equal(dim(none), c(1L, 2L))
+})
+
+test_that("par and zero yields differ by a convention term and a shape term", {
+  maturities <- c(1, 2, 5, 10, 30)
+
+  # Upward sloping zero curve: beta2 negative lifts the long end.
+  rising <- matrix(c(0.05, -0.03, 0.00), nrow = 1)
+  zero_r <- calculate_dns_yields(rising, maturities, 0.3)[1, ]
+  par_r <- dns_par_yields(rising, maturities, 0.3)[1, ]
+
+  # Far out, the shape term dominates: coupons are discounted at the lower
+  # rates earlier in the curve, so the par yield falls below the zero yield.
+  expect_lt(par_r[5], zero_r[5])
+  expect_lt(par_r[4], zero_r[4])
+
+  # At one year the shape term is tiny and the compounding convention
+  # dominates: a continuously compounded zero against a semiannual par rate
+  # differs by about y^2 / (2f).
+  expect_gt(par_r[1], zero_r[1])
+  expect_equal(par_r[1] - zero_r[1], zero_r[1]^2 / 4, tolerance = 0.1)
+
+  # Inverted zero curve: both terms push the par yield up, at every maturity.
+  inverted <- matrix(c(0.03, 0.03, 0.00), nrow = 1)
+  zero_i <- calculate_dns_yields(inverted, maturities, 0.3)[1, ]
+  par_i <- dns_par_yields(inverted, maturities, 0.3)[1, ]
+  expect_true(all(par_i > zero_i))
+})
+
+
+# ---- E-07 --------------------------------------------------------------------
+
+test_that("the bundled Treasury panel is well formed", {
+  data(treasury_yields)
+
+  expect_s3_class(treasury_yields, "data.frame")
+  expect_equal(names(treasury_yields)[1], "Date")
+  expect_s3_class(treasury_yields$Date, "Date")
+  expect_false(anyNA(treasury_yields))
+  expect_false(is.unsorted(treasury_yields$Date))
+  expect_gt(nrow(treasury_yields), 1400)
+
+  # Maturity columns are named by maturity in years, which is what the fitting
+  # functions read.
+  maturities <- suppressWarnings(
+    as.numeric(setdiff(names(treasury_yields), "Date"))
+  )
+  expect_false(anyNA(maturities))
+  expect_false(is.unsorted(maturities))
+
+  # Decimal form, not percentage points.
+  yields <- unlist(treasury_yields[, -1])
+  expect_lt(max(yields), 0.12)
+  expect_gte(min(yields), 0)
+
+  # Enough month-ends for the default monthly dynamics estimation.
+  expect_gte(length(unique(format(treasury_yields$Date, "%Y-%m"))), 20)
+})
+
+
+# ---- E-08 --------------------------------------------------------------------
+
+test_that("a cached response is served without a network call or an API key", {
+  cache_dir <- file.path(tempdir(), "dnsr-cache-test")
+  dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
+  on.exit(unlink(cache_dir, recursive = TRUE), add = TRUE)
+  reference <- data.frame(date = as.Date("2024-01-01") + 0:2,
+                          value = c(3.9, 4.0, 4.1))
+  saveRDS(reference,
+          file.path(cache_dir, "fred_DGS10_2024-01-01_2024-01-03.rds"))
+
+  old_key <- Sys.getenv("fred_api_key")
+  Sys.unsetenv("fred_api_key")
+  on.exit(if (nzchar(old_key)) Sys.setenv(fred_api_key = old_key), add = TRUE)
+
+  # A cache hit sends nothing, so it must not demand a key.
+  got <- fetch_fred_series("DGS10", start_date = "2024-01-01",
+                           end_date = "2024-01-03", cache_dir = cache_dir)
+  expect_equal(got, reference)
+
+  # A request with nothing cached still needs one.
+  expect_error(
+    fetch_fred_series("DGS2", start_date = "2024-01-01",
+                      end_date = "2024-01-03", cache_dir = cache_dir),
+    "API key not found"
+  )
+})
+
+test_that("retry and cache arguments are exposed end to end", {
+  expect_true(all(c("retries", "cache_dir") %in%
+                    names(formals(fetch_fred_series))))
+  expect_true(all(c("retries", "cache_dir") %in%
+                    names(formals(get_treasury_yield_data))))
+
+  # Appended, so existing positional calls still land where they did.
+  expect_equal(names(formals(fetch_fred_series))[1:5],
+               c("series_id", "api_key", "start_date", "end_date", "verbose"))
+})
