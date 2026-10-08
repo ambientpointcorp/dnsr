@@ -1,0 +1,11 @@
+pandoc: 3.8.3
+pkgdown: 2.2.1
+pkgdown_sha: ~
+articles:
+  dns-model-introduction: dns-model-introduction.html
+  dnsr-yuima-integration: dnsr-yuima-integration.html
+  fred-api-setup: fred-api-setup.html
+last_built: 2026-10-08T20:14Z
+urls:
+  reference: https://ambientpointcorp.github.io/dnsr/reference
+  article: https://ambientpointcorp.github.io/dnsr/articles

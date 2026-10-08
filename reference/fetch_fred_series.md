@@ -1,0 +1,84 @@
+# Treasury Yield Curve Data Utilities
+
+Functions for downloading and processing U.S. Treasury yield curve data
+from FRED API.
+
+Downloads U.S. Treasury yield data for specific maturities from the
+Federal Reserve Economic Data (FRED) API.
+
+## Usage
+
+``` r
+fetch_fred_series(
+  series_id,
+  api_key = NULL,
+  start_date = NULL,
+  end_date = NULL,
+  verbose = FALSE,
+  retries = 3L,
+  cache_dir = NULL
+)
+```
+
+## Arguments
+
+- series_id:
+
+  Character. FRED series ID for the treasury yield (e.g., "DGS10" for
+  10-year).
+
+- api_key:
+
+  Character. FRED API key. If NULL, will look for fred_api_key
+  environment variable.
+
+- start_date:
+
+  Date or character in "YYYY-MM-DD" format. The earliest date to
+  include.
+
+- end_date:
+
+  Date or character in "YYYY-MM-DD" format. The latest date to include.
+
+- verbose:
+
+  Logical. If TRUE, print processing information.
+
+- retries:
+
+  Integer. Number of attempts for the HTTP request. Transient failures
+  and 5xx responses are retried with exponential backoff; a 4xx response
+  (a bad key or series id) is not, since retrying cannot help.
+
+- cache_dir:
+
+  Character. Directory in which to cache responses. If given, a request
+  already on disk is read from there instead of being re-fetched. `NULL`
+  (the default) disables caching.
+
+## Value
+
+A data.frame with date and yield value columns.
+
+## Details
+
+Requires a FRED API key which can be obtained free at
+https://fred.stlouisfed.org/docs/api/api_key.html Set the environment
+variable fred_api_key or pass it directly to the function.
+
+Cache files are keyed on the series id and the requested date range
+only. The API key is never part of the key and is never written to disk.
+A cache hit is served before the key is looked up, so a cached corpus
+can be replayed with no key configured at all.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+# Set your API key first
+Sys.setenv(fred_api_key = "your_api_key_here")
+yield_10y <- fetch_fred_series("DGS10", start_date = "2020-01-01")
+head(yield_10y)
+} # }
+```
