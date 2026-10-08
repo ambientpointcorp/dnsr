@@ -478,6 +478,23 @@ test_that("every plot actually draws, not just builds", {
   }, add = TRUE)
 
   for (name in names(draws)) {
-    expect_no_error(print(draws[[name]]), info = name)
+    # expect_no_error() takes no info argument, so the plot's name is carried
+    # in the label instead -- otherwise a failure here says only that some
+    # plot among a dozen did not draw.
+    outcome <- tryCatch({
+      # The changes plot drops the leading NA of each change column, which
+      # ggplot2 reports; that is expected and is not what this test is about.
+      suppressWarnings(print(draws[[name]]))
+      TRUE
+    }, error = function(e) conditionMessage(e))
+
+    expect_true(
+      isTRUE(outcome),
+      label = if (isTRUE(outcome)) {
+        paste0(name, " draws")
+      } else {
+        paste0(name, " failed to draw: ", outcome)
+      }
+    )
   }
 })
