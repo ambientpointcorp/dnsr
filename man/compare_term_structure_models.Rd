@@ -9,7 +9,9 @@ compare_term_structure_models(
   date_to_compare = NULL,
   models = c("NS", "NSS", "Spline"),
   spline_df = 5,
-  units = c("bp", "decimal")
+  units = c("bp", "decimal"),
+  ufr = NULL,
+  alpha = 0.1
 )
 }
 \arguments{
@@ -18,14 +20,22 @@ compare_term_structure_models(
 \item{date_to_compare}{Date. The specific date to compare models.}
 
 \item{models}{Character vector. Models to compare, from "NS", "NSS",
-"Svensson", "Spline". The NSS column needs the \pkg{SmithWilson} package,
-which is not on CRAN; without it that model is skipped with a warning.}
+"Svensson", "Spline", "SmithWilson". "NSS" and "Svensson" name the same
+four-factor Nelson-Siegel-Svensson curve, which needs at least 5 observed
+maturities. "SmithWilson" needs the \pkg{SmithWilsonYieldCurve} package
+and is an interpolation rather than a fit; see Details.}
 
 \item{spline_df}{Integer. Degrees of freedom for spline model.}
 
 \item{units}{Character. Units for the returned fit metrics: \code{"bp"}
 (the default, basis points) or \code{"decimal"} (the units of the input
 yields).}
+
+\item{ufr}{Numeric. Ultimate forward rate for the Smith-Wilson curve, which
+its extrapolation converges to beyond the last observed maturity. Defaults
+to the longest observed yield.}
+
+\item{alpha}{Numeric. Smith-Wilson convergence speed toward \code{ufr}.}
 }
 \value{
 A list containing:
@@ -43,14 +53,39 @@ Decimal yields scale to basis points by 10,000, matching
 \code{\link{fit_dns_model}} and \code{\link{plot_factor_time_series}}.
 Maturities with no observed yield on \code{date_to_compare} are excluded
 from every model's fit and from the metrics.
+
+\strong{Smith-Wilson is an interpolation, not a parsimonious fit.} It
+carries one kernel term per input instrument, so it reproduces every
+observed yield essentially exactly -- on the bundled panel, to within
+4e-12 basis points. Its error metrics are therefore approximately zero by
+construction and are \emph{not} comparable with those of the three- and
+four-factor curves, which are fitting 3 or 4 parameters to 11
+observations. It is offered because its extrapolation beyond the last
+maturity, which converges to \code{ufr}, is the part that is actually
+useful, and because the comparison plot shows that behaviour clearly.
+
+The Svensson curve adds a second curvature term with its own decay,
+\deqn{y(m) = \beta_1 + \beta_2 L_2(\lambda_1, m) + \beta_3 L_3(\lambda_1, m) + \beta_4 L_3(\lambda_2, m),}
+and is fitted by the same concentrated least squares the Nelson-Siegel
+fitter offers: the four betas are solved exactly at each pair of decays and
+only the two decays are searched. Both decays are estimated rather than
+fixed, and they are kept apart, since they coincide the third and fourth
+loadings become identical and the betas are no longer identified.
 }
 \examples{
 data(treasury_yields)
 
-# Errors are in basis points
+# Errors are in basis points. The Svensson curve nests Nelson-Siegel, so it
+# fits at least as well.
 comparison <- compare_term_structure_models(treasury_yields,
-                                            models = c("NS", "Spline"))
+                                            models = c("NS", "NSS", "Spline"))
 comparison$metrics
 comparison$plot
+
+\dontrun{
+# Smith-Wilson interpolates exactly, so its error is ~0 by construction
+compare_term_structure_models(treasury_yields,
+                              models = c("NS", "SmithWilson"))$metrics
+}
 
 }

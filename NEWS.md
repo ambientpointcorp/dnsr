@@ -71,13 +71,42 @@ its name, arguments or argument order.
   lists already returned: every element keeps its name, and `is.list()`, `$`
   and `checkmate::assert_list()` behave as before. Only the default display
   changes.
-* Dropped `SmithWilson` from Suggests: it is not available from CRAN, which
-  made the package's dependency set unsolvable and so broke every CI job the
-  moment CI existed. The NSS comparison in
-  `compare_term_structure_models()` was already guarded by
-  `requireNamespace()` and now says, when it skips, that the package has to be
-  installed by hand. Dropped `gganimate` and `gifski` too, which nothing has
-  referenced since `animate_yield_curves()` was removed.
+* The Nelson-Siegel-Svensson comparison in
+  `compare_term_structure_models()` could never have produced a column. It
+  called `SmithWilson::Nelson.Siegel.Svensson()`, and `SmithWilson` is not a
+  package: the one that exists is `SmithWilsonYieldCurve`. So
+  `requireNamespace("SmithWilson")` returned FALSE on every machine and the
+  branch always skipped with a warning. Correcting the name would not have
+  helped either, because `SmithWilsonYieldCurve` exports only
+  `fFitSmithWilsonYieldCurve()` and
+  `fFitSmithWilsonYieldCurveToInstruments()` -- no Svensson fitter.
+
+  Svensson is now fitted directly. The curve is linear in its four betas once
+  the two decays are fixed, so it uses the same concentrated least squares as
+  `method = "profile"`, with the decays searched over a coarse grid and then
+  refined. The comparison is therefore available to everyone with no optional
+  dependency, both decays are estimated rather than fixed at 0.5 and 3, and on
+  the bundled panel it fits better than Nelson-Siegel on every date, as a
+  nested model must.
+
+  The search is bounded because the profiled residual has three degenerate
+  corners that fit beautifully and mean nothing: the two decays coinciding,
+  the first approaching zero (the slope loading flattens to a constant and
+  goes collinear with the intercept), and the first growing large (every
+  loading but the level decays to nothing inside the shortest maturity).
+  Unbounded, the search returned lambda1 = 1e-4 with betas of plus and minus
+  16,800 on one real date. Bounded, no date in the panel produces a factor
+  above 1 in magnitude.
+* New `"SmithWilson"` option in `compare_term_structure_models()`, which is
+  what `SmithWilsonYieldCurve` actually provides, with `ufr` and `alpha`
+  arguments. It is opt-in rather than in the default `models`, and documented
+  as an interpolation rather than a fit: it carries one kernel term per
+  instrument, so it reproduces every observed yield to within 4e-12 basis
+  points and its error metrics are zero by construction, not comparable with a
+  three- or four-factor curve's. The useful part is its extrapolation beyond
+  the last maturity, which converges to `ufr`.
+* Dropped `gganimate` and `gifski` from Suggests; nothing has referenced them
+  since `animate_yield_curves()` was removed.
 * `plot_yield_pca()` gains `scale`. `scale = FALSE` decomposes the covariance
   matrix rather than standardising each maturity first, which is the usual
   convention for yield curves and is what produces the familiar level, slope

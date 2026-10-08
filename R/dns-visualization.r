@@ -1242,9 +1242,15 @@ plot_yield_pca <- function(yield_data, n_components = 3,
 #' @param yield_data Data frame. Historical yield curve data with 'Date' column.
 #' @param date_to_compare Date. The specific date to compare models.
 #' @param models Character vector. Models to compare, from "NS", "NSS",
-#'   "Svensson", "Spline". The NSS column needs the \pkg{SmithWilson} package,
-#'   which is not on CRAN; without it that model is skipped with a warning.
+#'   "Svensson", "Spline", "SmithWilson". "NSS" and "Svensson" name the same
+#'   four-factor Nelson-Siegel-Svensson curve, which needs at least 5 observed
+#'   maturities. "SmithWilson" needs the \pkg{SmithWilsonYieldCurve} package
+#'   and is an interpolation rather than a fit; see Details.
 #' @param spline_df Integer. Degrees of freedom for spline model.
+#' @param ufr Numeric. Ultimate forward rate for the Smith-Wilson curve, which
+#'   its extrapolation converges to beyond the last observed maturity. Defaults
+#'   to the longest observed yield.
+#' @param alpha Numeric. Smith-Wilson convergence speed toward \code{ufr}.
 #' @param units Character. Units for the returned fit metrics: \code{"bp"}
 #'   (the default, basis points) or \code{"decimal"} (the units of the input
 #'   yields).
@@ -1260,26 +1266,55 @@ plot_yield_pca <- function(yield_data, n_components = 3,
 #' Maturities with no observed yield on \code{date_to_compare} are excluded
 #' from every model's fit and from the metrics.
 #'
+#' \strong{Smith-Wilson is an interpolation, not a parsimonious fit.} It
+#' carries one kernel term per input instrument, so it reproduces every
+#' observed yield essentially exactly -- on the bundled panel, to within
+#' 4e-12 basis points. Its error metrics are therefore approximately zero by
+#' construction and are \emph{not} comparable with those of the three- and
+#' four-factor curves, which are fitting 3 or 4 parameters to 11
+#' observations. It is offered because its extrapolation beyond the last
+#' maturity, which converges to \code{ufr}, is the part that is actually
+#' useful, and because the comparison plot shows that behaviour clearly.
+#'
+#' The Svensson curve adds a second curvature term with its own decay,
+#' \deqn{y(m) = \beta_1 + \beta_2 L_2(\lambda_1, m) + \beta_3 L_3(\lambda_1, m) + \beta_4 L_3(\lambda_2, m),}
+#' and is fitted by the same concentrated least squares the Nelson-Siegel
+#' fitter offers: the four betas are solved exactly at each pair of decays and
+#' only the two decays are searched. Both decays are estimated rather than
+#' fixed, and they are kept apart, since they coincide the third and fourth
+#' loadings become identical and the betas are no longer identified.
+#'
 #' @examples
 #' data(treasury_yields)
 #'
-#' # Errors are in basis points
+#' # Errors are in basis points. The Svensson curve nests Nelson-Siegel, so it
+#' # fits at least as well.
 #' comparison <- compare_term_structure_models(treasury_yields,
-#'                                             models = c("NS", "Spline"))
+#'                                             models = c("NS", "NSS", "Spline"))
 #' comparison$metrics
 #' comparison$plot
+#'
+#' \dontrun{
+#' # Smith-Wilson interpolates exactly, so its error is ~0 by construction
+#' compare_term_structure_models(treasury_yields,
+#'                               models = c("NS", "SmithWilson"))$metrics
+#' }
 #'
 #' @export
 compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
                                           models = c("NS", "NSS", "Spline"),
                                           spline_df = 5,
-                                          units = c("bp", "decimal")) {
+                                          units = c("bp", "decimal"),
+                                          ufr = NULL, alpha = 0.1) {
   # Parameter validation
   units <- match.arg(units)
   checkmate::assert_data_frame(yield_data)
   checkmate::assert_names(names(yield_data), must.include = "Date")
-  checkmate::assert_subset(models, c("NS", "NSS", "Svensson", "Spline"))
+  checkmate::assert_subset(models,
+                           c("NS", "NSS", "Svensson", "Spline", "SmithWilson"))
   checkmate::assert_count(spline_df, positive = TRUE)
+  if (!is.null(ufr)) checkmate::assert_numeric(ufr, len = 1, any.missing = FALSE)
+  checkmate::assert_numeric(alpha, lower = 0, len = 1, any.missing = FALSE)
 
   # Decimal yields scale to basis points by 10,000.
   err_scale <- if (identical(units, "bp")) 10000 else 1
@@ -1368,33 +1403,31 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
     )
   }
 
-  # Fit Nelson-Siegel-Svensson model if requested
+  # Fit Nelson-Siegel-Svensson model if requested. Fitted here rather than
+  # through a third-party package: the curve is linear in its four betas once
+  # the two decays are fixed, so the same profiled solve the Nelson-Siegel
+  # fitter uses applies with a two-dimensional search. This also means the
+  # comparison is available to everyone, rather than depending on a package
+  # that is not distributed through CRAN.
   if ("NSS" %in% models || "Svensson" %in% models) {
-    # Check if SmithWilson package is available
-    if (!requireNamespace("SmithWilson", quietly = TRUE)) {
-      # Not listed in Suggests: SmithWilson is not available from CRAN, so
-      # declaring it there makes the package's dependencies unsolvable. The
-      # NSS comparison is simply unavailable unless it is installed by hand.
-      warning("Package 'SmithWilson' is needed for the NSS model and is not ",
-              "on CRAN; install it manually to include that column. Skipping.")
+    if (length(maturities) < 5) {
+      warning("The Svensson curve has four factors and needs at least 5 ",
+              "observed maturities; got ", length(maturities), ". Skipping.")
     } else {
-      # Fit NSS model
-      tryCatch({
-        nss_fit <- SmithWilson::Nelson.Siegel.Svensson(
-          rate = yields * 100,  # Convert to percentage
-          maturity = maturities,
-          lambda1 = 0.5,
-          lambda2 = 3
-        )
+      nss_result <- tryCatch(
+        fit_svensson(maturities, yields),
+        error = function(e) {
+          warning("Error fitting NSS model: ", conditionMessage(e))
+          NULL
+        }
+      )
 
-        # Extract fitted values
-        nss_fitted <- nss_fit$Spot.Rate / 100  # Convert back to decimal
-        model_fits$NSS <- nss_fitted
+      if (!is.null(nss_result)) {
+        model_fits$NSS <- nss_result$fitted_yields
 
-        # Calculate fit metrics
-        rmse <- sqrt(mean((yields - nss_fitted)^2, na.rm = TRUE))
-        mae <- mean(abs(yields - nss_fitted), na.rm = TRUE)
-        max_error <- max(abs(yields - nss_fitted), na.rm = TRUE)
+        rmse <- nss_result$rmse
+        mae <- mean(abs(nss_result$residuals), na.rm = TRUE)
+        max_error <- max(abs(nss_result$residuals), na.rm = TRUE)
 
         fit_metrics <- rbind(
           fit_metrics,
@@ -1405,9 +1438,7 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
             MaxError = max_error * err_scale
           )
         )
-      }, error = function(e) {
-        warning("Error fitting NSS model: ", e$message)
-      })
+      }
     }
   }
 
@@ -1432,6 +1463,46 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
         MaxError = max_error * err_scale
       )
     )
+  }
+
+  # Fit the Smith-Wilson curve if requested. Each maturity enters as a
+  # zero-coupon bond: one unit at m, priced at exp(-y(m) m).
+  if ("SmithWilson" %in% models) {
+    if (!requireNamespace("SmithWilsonYieldCurve", quietly = TRUE)) {
+      warning("Package 'SmithWilsonYieldCurve' is needed for the Smith-Wilson ",
+              "curve. Skipping.")
+    } else {
+      sw_ufr <- if (is.null(ufr)) yields[which.max(maturities)] else ufr
+      sw_result <- tryCatch({
+        curve <- SmithWilsonYieldCurve::fFitSmithWilsonYieldCurve(
+          TimesVector = maturities,
+          CashflowMatrix = diag(length(maturities)),
+          MarketValueVector = exp(-yields * maturities),
+          ufr = sw_ufr,
+          alpha = alpha
+        )
+        prices <- vapply(maturities, curve$P, numeric(1))
+        -log(prices) / maturities
+      }, error = function(e) {
+        warning("Error fitting Smith-Wilson curve: ", conditionMessage(e))
+        NULL
+      })
+
+      if (!is.null(sw_result)) {
+        model_fits$SmithWilson <- sw_result
+
+        residual <- yields - sw_result
+        fit_metrics <- rbind(
+          fit_metrics,
+          data.frame(
+            Model = "Smith-Wilson",
+            RMSE = sqrt(mean(residual^2, na.rm = TRUE)) * err_scale,
+            MAE = mean(abs(residual), na.rm = TRUE) * err_scale,
+            MaxError = max(abs(residual), na.rm = TRUE) * err_scale
+          )
+        )
+      }
+    }
   }
 
   # Convert to long format for plotting
