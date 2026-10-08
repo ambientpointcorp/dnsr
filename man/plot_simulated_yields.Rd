@@ -32,17 +32,17 @@ A list of ggplot objects:
 Creates plots of simulated yield curves from a DNS simulation.
 }
 \examples{
-\dontrun{
 params <- list(
   kappa = c(0.02, 0.3, 0.5),
   theta = c(0.04, -0.02, 0.01),
   sigma = c(0.005, 0.01, 0.02)
 )
-initial_factors <- c(0.035, -0.015, 0.005)
 maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
-sim_result <- simulate_dns_yield_curves(params, initial_factors, maturities)
-plots <- plot_simulated_yields(sim_result, time_points = c(0, 1, 5, 10))
-print(plots$yield_curves)
-}
+sim_result <- simulate_dns_yield_curves(params, c(0.035, -0.015, 0.005),
+                                        maturities, n_paths = 50,
+                                        engine = "exact", seed = 1)
+
+# Facets follow the calendar, so Year 10 comes after Year 5
+plot_simulated_yields(sim_result, time_points = c(0, 1, 5, 10))$yield_curves
 
 }

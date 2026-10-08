@@ -32,11 +32,8 @@ Functions for visualizing DNS model results and yield curves.
 Creates a plot comparing actual yield curves with DNS model fits.
 }
 \examples{
-\dontrun{
-yield_data <- get_treasury_yield_combined("2020-01-01")
-dns_result <- fit_dns_model(yield_data, n_days = 30)
-p <- plot_yield_curves(yield_data, dns_result)
-print(p)
-}
+data(treasury_yields)
+dns_result <- fit_dns_model(treasury_yields, n_days = 30, show_progress = FALSE)
+plot_yield_curves(treasury_yields, dns_result, max_plots = 4)
 
 }

@@ -27,16 +27,16 @@ A list of ggplot objects, one for each factor.
 Creates plots of simulated DNS factors from a DNS simulation.
 }
 \examples{
-\dontrun{
 params <- list(
   kappa = c(0.02, 0.3, 0.5),
   theta = c(0.04, -0.02, 0.01),
   sigma = c(0.005, 0.01, 0.02)
 )
-initial_factors <- c(0.035, -0.015, 0.005)
-sim_result <- simulate_dns_factors(params, initial_factors)
+sim_result <- simulate_dns_factors(params, c(0.035, -0.015, 0.005),
+                                   n_paths = 50, engine = "exact", seed = 1)
 plots <- plot_simulated_factors(sim_result)
-print(plots$level)
-}
+plots$level
+
+plot_simulated_factors(sim_result, plot_trajectories = TRUE)$level
 
 }

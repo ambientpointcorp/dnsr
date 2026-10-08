@@ -30,10 +30,10 @@ A ggplot object with the heat map.
 Creates a heat map visualization of yield curve evolution over time.
 }
 \examples{
-\dontrun{
-yield_data <- get_treasury_yield_combined("2020-01-01")
-p <- plot_yield_heatmap(yield_data)
-print(p)
-}
+data(treasury_yields)
+plot_yield_heatmap(treasury_yields)
+
+# Most recent dates at the top
+plot_yield_heatmap(treasury_yields, reverse_time = TRUE)
 
 }

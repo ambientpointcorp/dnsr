@@ -8,7 +8,8 @@ compare_term_structure_models(
   yield_data,
   date_to_compare = NULL,
   models = c("NS", "NSS", "Spline"),
-  spline_df = 5
+  spline_df = 5,
+  units = c("bp", "decimal")
 )
 }
 \arguments{
@@ -19,22 +20,35 @@ compare_term_structure_models(
 \item{models}{Character vector. Models to compare, from "NS", "NSS", "Svensson", "Spline".}
 
 \item{spline_df}{Integer. Degrees of freedom for spline model.}
+
+\item{units}{Character. Units for the returned fit metrics: \code{"bp"}
+(the default, basis points) or \code{"decimal"} (the units of the input
+yields).}
 }
 \value{
 A list containing:
 \itemize{
 \item plot: A ggplot object with model comparisons
-\item metrics: A data frame with fit metrics for each model
+\item metrics: A data frame with RMSE, MAE and MaxError for each model, in
+\code{units}
 }
 }
 \description{
 Compares the Nelson-Siegel model fit against other term structure models.
 }
-\examples{
-\dontrun{
-yield_data <- get_treasury_yield_combined("2023-01-01")
-comparison <- compare_term_structure_models(yield_data, Sys.Date() - 30)
-print(comparison$plot)
+\details{
+Decimal yields scale to basis points by 10,000, matching
+\code{\link{fit_dns_model}} and \code{\link{plot_factor_time_series}}.
+Maturities with no observed yield on \code{date_to_compare} are excluded
+from every model's fit and from the metrics.
 }
+\examples{
+data(treasury_yields)
+
+# Errors are in basis points
+comparison <- compare_term_structure_models(treasury_yields,
+                                            models = c("NS", "Spline"))
+comparison$metrics
+comparison$plot
 
 }
