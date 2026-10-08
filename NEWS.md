@@ -120,6 +120,15 @@ its name, arguments or argument order.
   hundreds. The per-date detail is in the new `at_bound` element, a logical
   matrix kept beside `parameters` rather than inside it, so that frame stays
   numeric apart from its `Date` column.
+* The Greek letters in plot labels made several plots unrenderable on Windows.
+  The default device there converts text through a single-byte charset and
+  fails outright on U+03BB: `conversion failure on 'lambda = 0.0609' in
+  'mbcsToSbcs'`. `plot_dns_loadings()` and `plot_factor_time_series()` now use
+  plotmath, which goes through R's symbol font and renders anywhere, and the
+  package source is fully ASCII. The bug predates this release; it surfaced
+  only once the examples became runnable and `R CMD check` started drawing
+  them. A test now prints every plot to a null device, since `ggplot_build()`
+  stops short of text measurement and cannot catch this class of fault.
 * `geom_line(size = )` replaced with `linewidth = `, which ggplot2 has wanted
   since 3.4.
 * `plot_yield_heatmap()` decided whether to rescale yields to percent one

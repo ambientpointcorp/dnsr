@@ -228,12 +228,14 @@ plot_factor_time_series <- function(dns_result, show_changes = FALSE) {
     value.name = "Value"
   )
 
-  # Create factor labels
-  factor_labels <- c(
-    beta1 = "Level (\u03b2\u2081)",
-    beta2 = "Slope (\u03b2\u2082)",
-    beta3 = "Curvature (\u03b2\u2083)"
-  )
+  # Create factor labels. Written as plotmath rather than literal Greek: on
+  # Windows the default device converts text through a single-byte charset and
+  # fails outright on U+03BB and friends ("conversion failure ... in
+  # mbcsToSbcs"), so a literal lambda or beta made these plots unrenderable
+  # there. Plotmath goes through R's symbol font instead and renders anywhere.
+  factor_breaks <- c("beta1", "beta2", "beta3")
+  factor_labels <- parse(text = c("Level~(beta[1])", "Slope~(beta[2])",
+                                  "Curvature~(beta[3])"))
 
   # Plot factors
   plots$factors <- ggplot(params_long, aes(x = Date, y = Value, color = Factor)) +
@@ -246,6 +248,7 @@ plot_factor_time_series <- function(dns_result, show_changes = FALSE) {
     ) +
     scale_color_manual(
       values = c("blue", "red", "green"),
+      breaks = factor_breaks,
       labels = factor_labels
     ) +
     theme_minimal() +
@@ -273,11 +276,10 @@ plot_factor_time_series <- function(dns_result, show_changes = FALSE) {
     )
 
     # Create change labels
-    change_labels <- c(
-      beta1_change = "Level (\u03b2\u2081) Change",
-      beta2_change = "Slope (\u03b2\u2082) Change",
-      beta3_change = "Curvature (\u03b2\u2083) Change"
-    )
+    change_breaks <- c("beta1_change", "beta2_change", "beta3_change")
+    change_labels <- parse(text = c("Level~(beta[1])~change",
+                                    "Slope~(beta[2])~change",
+                                    "Curvature~(beta[3])~change"))
 
     # Plot changes
     plots$changes <- ggplot(changes_long, aes(x = Date, y = Change, color = Factor)) +
@@ -290,6 +292,7 @@ plot_factor_time_series <- function(dns_result, show_changes = FALSE) {
       ) +
       scale_color_manual(
         values = c("blue", "red", "green"),
+        breaks = change_breaks,
         labels = change_labels
       ) +
       theme_minimal() +
@@ -694,7 +697,7 @@ plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
     geom_line(linewidth = 1) +
     labs(
       title = "DNS Model Factor Loadings",
-      subtitle = paste("\u03bb =", lambda),
+      subtitle = bquote(lambda == .(lambda)),
       x = "Maturity (years)",
       y = "Loading",
       color = "Factor"
@@ -720,12 +723,13 @@ plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
         max(loading_data$Curvature)
       ),
       Factor = c("Level", "Slope", "Curvature"),
-      Label = c("Level (\u03b2\u2081)", "Slope (\u03b2\u2082)", "Curvature (\u03b2\u2083)")
+      Label = c("Level~(beta[1])", "Slope~(beta[2])", "Curvature~(beta[3])")
     )
 
     p <- p + geom_text(
       data = label_points,
       aes(label = Label, color = Factor),
+      parse = TRUE,
       hjust = -0.1,
       vjust = 1.2,
       size = 4

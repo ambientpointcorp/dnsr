@@ -425,3 +425,59 @@ test_that("get_calibrated_dns_params takes an api_key", {
   expect_equal(args[1:5],
                c("lookback_days", "lambda", "start_date", "end_date", "verbose"))
 })
+
+
+# ---- plot rendering ---------------------------------------------------------
+
+test_that("every plot actually draws, not just builds", {
+  # ggplot_build() stops short of text measurement, so it cannot catch a label
+  # the device is unable to render. That gap is how literal Greek in these
+  # labels survived: on Windows the default device converts text through a
+  # single-byte charset and failed with "conversion failure on 'lambda =
+  # 0.0609' in mbcsToSbcs", which only surfaced once the examples were made
+  # runnable and R CMD check started drawing them. Printing to a null device
+  # exercises the whole pipeline.
+  data(treasury_yields)
+  panel <- treasury_yields[1:60, ]
+  fit <- suppressWarnings(
+    fit_dns_model(panel, n_days = 40, show_progress = FALSE)
+  )
+
+  draws <- list(
+    loadings = plot_dns_loadings(),
+    loadings_plain = plot_dns_loadings(show_labels = FALSE),
+    curves = plot_yield_curves(panel, fit, max_plots = 3),
+    heatmap = plot_yield_heatmap(panel),
+    heatmap_reversed = plot_yield_heatmap(panel, reverse_time = TRUE),
+    pca_weights = plot_yield_pca(panel, scale = FALSE)$plots$weights,
+    pca_variance = plot_yield_pca(panel)$plots$variance,
+    comparison = suppressWarnings(
+      compare_term_structure_models(panel, models = c("NS", "NSS", "Spline"))
+    )$plot
+  )
+
+  factor_plots <- plot_factor_time_series(fit, show_changes = TRUE)
+  draws$factors <- factor_plots$factors
+  draws$changes <- factor_plots$changes
+  draws$rmse <- factor_plots$rmse
+
+  params <- list(kappa = c(0.02, 0.3, 0.5), theta = c(0.04, -0.02, 0.01),
+                 sigma = c(0.005, 0.01, 0.02))
+  simulation <- simulate_dns_yield_curves(
+    params, c(0.05, -0.01, 0.01), maturities = c(1, 5, 10, 30),
+    n_paths = 20, engine = "exact", seed = 1
+  )
+  draws$simulated_factors <- plot_simulated_factors(simulation)$level
+  draws$simulated_yields <- plot_simulated_yields(
+    simulation, time_points = c(0, 1, 5, 10)
+  )$yield_curves
+
+  grDevices::pdf(NULL)
+  on.exit({
+    while (grDevices::dev.cur() > 1) grDevices::dev.off()
+  }, add = TRUE)
+
+  for (name in names(draws)) {
+    expect_no_error(print(draws[[name]]), info = name)
+  }
+})
