@@ -15,7 +15,11 @@ plot_yield_heatmap(
 \arguments{
 \item{yield_data}{Data frame. Historical yield curve data with 'Date' column.}
 
-\item{reverse_time}{Logical. If TRUE, display most recent dates at the top.}
+\item{reverse_time}{Logical. Flips the date axis. A date axis increases
+upward, so by default the oldest date is at the bottom and the most recent
+at the top; \code{TRUE} puts the most recent at the bottom. (Before 0.4.0
+this argument did nothing, and its documentation described the default
+orientation rather than the effect of setting it.)}
 
 \item{plot_type}{Character. One of "yields", "changes", or "curvature".}
 

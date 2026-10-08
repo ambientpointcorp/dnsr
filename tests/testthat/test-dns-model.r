@@ -132,8 +132,12 @@ test_that("fit_dns_model handles time series data correctly", {
     yield_data[[col_name]] <- 0.02 + 0.01 * sin(m / 5) + 0.002 * as.numeric(dates - dates[1]) / 10
   }
   
-  # Fit DNS model
-  dns_result <- fit_dns_model(yield_data, parallel = FALSE, show_progress = FALSE)
+  # Fit DNS model. The synthetic curve here is not a Nelson-Siegel shape, so
+  # some fits come to rest on a lambda bound; that is reported, and is not what
+  # this test is about.
+  dns_result <- suppressWarnings(
+    fit_dns_model(yield_data, parallel = FALSE, show_progress = FALSE)
+  )
   
   # Check result structure
   expect_type(dns_result, "list")

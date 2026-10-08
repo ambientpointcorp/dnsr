@@ -299,15 +299,22 @@ test_that("plot_simulated_factors handles a single path", {
 test_that("plot_yield_heatmap reverse_time reverses the date axis", {
   panel <- ns_panel(20)
 
-  normal <- ggplot2::ggplot_build(
-    plot_yield_heatmap(panel, reverse_time = FALSE)
-  )$layout$panel_params[[1]]$y.range
-  reversed <- ggplot2::ggplot_build(
-    plot_yield_heatmap(panel, reverse_time = TRUE)
-  )$layout$panel_params[[1]]$y.range
+  # Which calendar date ends up at the top of the panel. Asserted through the
+  # built y positions rather than the panel range: the range is an internal
+  # that ggplot2 4.x normalises, and an earlier fix here reversed the axis on
+  # 3.x while silently doing nothing on 4.x.
+  top_date <- function(reverse) {
+    built <- ggplot2::ggplot_build(
+      plot_yield_heatmap(panel, reverse_time = reverse)
+    )
+    highest <- max(built$data[[1]]$y)
+    as.Date(if (reverse) -highest else highest, origin = "1970-01-01")
+  }
 
-  expect_lt(normal[1], normal[2])
-  expect_gt(reversed[1], reversed[2])
+  # A date axis increases upward, so the default puts the most recent date at
+  # the top and reverse_time flips that.
+  expect_equal(top_date(FALSE), max(panel$Date))
+  expect_equal(top_date(TRUE), min(panel$Date))
 })
 
 test_that("plot_yield_pca returns var_explained with every plot flag off", {

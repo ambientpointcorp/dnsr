@@ -741,7 +741,11 @@ plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
 #' Creates a heat map visualization of yield curve evolution over time.
 #'
 #' @param yield_data Data frame. Historical yield curve data with 'Date' column.
-#' @param reverse_time Logical. If TRUE, display most recent dates at the top.
+#' @param reverse_time Logical. Flips the date axis. A date axis increases
+#'   upward, so by default the oldest date is at the bottom and the most recent
+#'   at the top; \code{TRUE} puts the most recent at the bottom. (Before 0.4.0
+#'   this argument did nothing, and its documentation described the default
+#'   orientation rather than the effect of setting it.)
 #' @param plot_type Character. One of "yields", "changes", or "curvature".
 #' @param smooth_data Logical. If TRUE, apply smoothing to the heat map data.
 #' @param color_palette Character vector. Colors for the heat map.
@@ -875,6 +879,17 @@ plot_yield_heatmap <- function(yield_data, reverse_time = FALSE,
     }
   }
 
+  # Reverse the date axis if requested, by negating the values and labelling
+  # them back as dates. This is done on the data rather than through the scale
+  # or the coordinate system, because neither route is portable:
+  # scale_y_reverse() negates the variable and unary minus is undefined for
+  # Date, while coord_cartesian(ylim = rev(range)) reverses the panel on
+  # ggplot2 3.x but is normalised away on 4.x -- so the argument silently
+  # stopped working depending on which version was installed.
+  if (reverse_time) {
+    plot_data$Date <- -as.numeric(plot_data$Date)
+  }
+
   # Create the heatmap
   p <- ggplot(plot_data, aes(x = Maturity, y = Date, fill = Value)) +
     geom_tile() +
@@ -893,12 +908,14 @@ plot_yield_heatmap <- function(yield_data, reverse_time = FALSE,
       legend.position = "right"
     )
 
-  # Reverse the date axis if requested. scale_y_reverse() cannot be used here:
-  # it negates the variable, and unary minus is undefined for Date. Reversed
-  # limits on the coordinate system flip the axis and keep date labels.
   if (reverse_time) {
-    date_range <- range(plot_data$Date, na.rm = TRUE)
-    p <- p + ggplot2::coord_cartesian(ylim = rev(date_range))
+    # Breaks are chosen as dates and then negated, so the axis carries real
+    # date labels and no break falls outside the data as an NA.
+    date_breaks <- pretty(as.Date(-plot_data$Date, origin = "1970-01-01"))
+    p <- p + scale_y_continuous(
+      breaks = -as.numeric(date_breaks),
+      labels = format(date_breaks, "%Y-%m-%d")
+    )
   }
 
   return(p)

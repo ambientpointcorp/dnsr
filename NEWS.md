@@ -203,9 +203,15 @@ below.
 * `plot_simulated_factors()` failed on a single-path simulation
   (`dim(X) must have a positive length`), as did the term-structure branch of
   `plot_simulated_yields()`. Both now keep the path dimension.
-* `plot_yield_heatmap(reverse_time = TRUE)` was a no-op; it now reverses the
-  date axis. (`scale_y_reverse()` cannot be used: unary minus is undefined for
-  `Date`.)
+* `plot_yield_heatmap(reverse_time = TRUE)` was a no-op, and its documentation
+  described the *default* orientation rather than the effect of setting it: a
+  date axis increases upward, so the most recent date was already at the top.
+  The argument now flips the axis, putting the most recent date at the bottom,
+  and says so. It is implemented on the data rather than through the scale or
+  the coordinate system, because neither is portable --
+  `scale_y_reverse()` negates the variable and unary minus is undefined for
+  `Date`, while `coord_cartesian(ylim = rev(range))` reverses the panel on
+  ggplot2 3.x but is normalised away on 4.x.
 * `plot_yield_pca()` errored with `object 'var_explained' not found` when all
   three `plot_*` flags were `FALSE`.
 * `plot_simulated_yields()` facets sorted lexically, putting "Year 10" between
