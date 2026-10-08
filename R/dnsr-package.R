@@ -66,13 +66,15 @@
 #' # Estimate factor dynamics
 #' dynamics <- estimate_dns_dynamics(dns_result$parameters)
 #'
-#' # Simulate future yield curves
-#' params <- dns_dynamics_to_sim_params(dynamics)
+#' # Simulate future yield curves, starting from the most recent fitted factors
+#' latest <- dns_result$parameters[which.max(dns_result$parameters$Date), ]
+#' params <- dns_dynamics_to_sim_params(dynamics, lambda = latest$lambda)
 #' sim_result <- simulate_dns_yield_curves(
 #'   params = params,
-#'   initial_factors = dynamics$initial_factors,
+#'   initial_factors = as.numeric(latest[c("beta1", "beta2", "beta3")]),
 #'   maturities = c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30),
-#'   n_paths = 100
+#'   n_paths = 100,
+#'   engine = "exact"
 #' )
 #'
 #' # Visualize results
@@ -81,23 +83,29 @@
 #' plot_simulated_yields(sim_result)
 #' }
 #'
-#' @docType package
 #' @name dnsr-package
 "_PACKAGE"
 
-# Ensure necessary packages are imported
-#' @import ggplot2
-#' @importFrom stats optim lm coef sd resid na.omit predict quantile smooth.spline
-#' @importFrom dplyr %>% mutate across where lag filter select all_of bind_rows arrange
-#' @importFrom lubridate mdy date today
-#' @importFrom tidyr replace_na
-#' @importFrom reshape2 melt
-#' @importFrom checkmate assert_data_frame assert_subset assert_class assert_numeric assert_list
-#' @importFrom graphics par boxplot matplot
-#' @importFrom grDevices rainbow
+# Imports shared across the package. These are declared here rather than in
+# each file so there is one place to look; per-file blocks cover what is local
+# to a file.
+#' @importFrom stats coef cor lm median na.omit optim prcomp predict quantile
+#' @importFrom stats resid residuals rnorm sd smooth.spline
 #' @importFrom utils head tail
 #' @importFrom methods is
-#' @importFrom future plan multisession sequential
-#' @importFrom future.apply future_lapply
-#' @importFrom progress progress_bar
 NULL
+
+# Columns created inside the function (by reshape2::melt, expand.grid or
+# data.frame) and then referenced in ggplot2 aesthetics. R CMD check cannot see
+# that they are local, so it reports them as undefined globals.
+utils::globalVariables(c(
+  # yield data and fitted factors
+  "Date", "rmse", "maturity", "yield", "type", "label",
+  # melted long-format frames
+  "Factor", "Value", "Change", "Loading", "Label",
+  "Maturity", "Yield", "Model",
+  # simulation frames
+  "Time", "Type", "Path", "Mean", "Q10", "Q90", "Forward",
+  # PCA frames
+  "Component", "Weight", "Score", "Variance", "Cumulative"
+))

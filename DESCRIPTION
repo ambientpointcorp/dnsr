@@ -1,6 +1,6 @@
 Package: dnsr
 Title: Dynamic Nelson-Siegel Term Structure Model
-Version: 0.2.0
+Version: 0.4.0
 Authors@R: 
     person("Ariel", "R. H.", email = "ariel@ambientpointcorp.com", role = c("aut", "cre"))
 Description: Implementation of the Dynamic Nelson-Siegel (DNS) model for yield curve 
@@ -10,28 +10,30 @@ Description: Implementation of the Dynamic Nelson-Siegel (DNS) model for yield c
     YUIMA framework. It includes visualization tools and utilities for working with
     interest rate term structures in a financial context.
 License: MIT + file LICENSE
+URL: https://github.com/ambientpointcorp/dnsr
+BugReports: https://github.com/ambientpointcorp/dnsr/issues
 Encoding: UTF-8
+Language: en-US
+LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.1)
 Imports: 
     dplyr (>= 1.0.0),
     ggplot2 (>= 3.3.0),
     httr (>= 1.4.0),
-    lubridate (>= 1.7.0),
-    readr (>= 2.0.0),
     reshape2 (>= 1.4.0),
     stats (>= 4.0.0),
-    tidyr (>= 1.1.0),
     checkmate (>= 2.0.0),
     future (>= 1.21.0),
     future.apply (>= 1.8.1),
-    data.table (>= 1.14.0),
     progress (>= 1.2.2),
     methods,
-    Matrix,
     zoo
 Suggests:
     testthat (>= 3.0.0),
+    mockery (>= 0.4.2),
     knitr (>= 1.30),
     rmarkdown (>= 2.5),
     covr (>= 3.5.0),
