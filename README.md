@@ -6,12 +6,20 @@ The `dnsr` package provides a comprehensive implementation of the Dynamic Nelson
 
 ## Features
 
-- **Data Acquisition**: Download and process U.S. Treasury yield curve data
-- **Model Calibration**: Robust fitting of the DNS model to yield curve time series
-- **Factor Dynamics**: Estimate stochastic processes governing yield curve evolution
-- **Advanced Simulation**: Generate future yield curve scenarios using rigorous SDE simulation via YUIMA
+- **Data Acquisition**: Download and process U.S. Treasury yield curve data,
+  with retries and an optional on-disk cache
+- **Model Calibration**: Robust fitting of the DNS model to yield curve time
+  series, numerically or by concentrated least squares
+- **Factor Dynamics**: Estimate the stochastic processes governing yield curve
+  evolution, as independent factors or as a full VAR(1), with standard errors
+- **Advanced Simulation**: Generate future yield curve scenarios, either
+  through YUIMA or by sampling the exact transition law
+- **Pricing**: Discount factors, zero-coupon prices and par yields off a
+  fitted curve
 - **Visualization**: Create informative plots of yield curves and model results
 - **Parallel Processing**: Support for faster model fitting with multiple cores
+- **Bundled data**: A six-year Treasury panel, so everything above can be
+  tried without an API key
 
 ## Installation
 
@@ -44,6 +52,42 @@ usethis::edit_r_environ()
 
 ## Quick Start
 
+The package ships a six-year Treasury panel, so this runs as written:
+
+```r
+library(dnsr)
+data(treasury_yields)
+
+# Fit the 750 most recent curves -- about three years, which is 36 month-ends,
+# enough for the dynamics estimation below. "profile" solves the betas in
+# closed form at each lambda, so it needs no start values.
+dns_result <- fit_dns_model(treasury_yields, n_days = 750, method = "profile")
+dns_result
+
+# Factor dynamics, month-end sampled by default
+dynamics <- estimate_dns_dynamics(dns_result$parameters)
+dynamics
+
+# Simulate forward from the most recent curve
+latest <- dns_result$parameters[which.max(dns_result$parameters$Date), ]
+params <- dns_dynamics_to_sim_params(dynamics, lambda = latest$lambda)
+
+sim <- simulate_dns_yield_curves(
+  params = params,
+  initial_factors = as.numeric(latest[c("beta1", "beta2", "beta3")]),
+  maturities = c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30),
+  n_paths = 1000,
+  engine = "exact"   # exact transition law; no YUIMA needed
+)
+
+# Discount factors and par yields off the fitted curve
+factors <- matrix(as.numeric(latest[c("beta1", "beta2", "beta3")]), nrow = 1)
+dns_discount_factors(factors, c(1, 5, 10, 30), latest$lambda)
+dns_par_yields(factors, c(1, 5, 10, 30), latest$lambda)
+```
+
+## Working with live data
+
 ```r
 # Set FRED API key (do this once per session)
 Sys.setenv(fred_api_key = "your_api_key_here")
@@ -65,7 +109,10 @@ print(factor_plots$factors)
 dynamics <- estimate_dns_dynamics(dns_result$parameters)
 
 # Simulate future yield curves with advanced SDE methods (requires YUIMA)
-params <- dns_dynamics_to_sim_params(dynamics)
+# get_treasury_yield_*() returns rows most-recent-first and fit_dns_model()
+# keeps that order by default, so row 1 is the latest curve. Pass
+# date_order = "ascending" if you would rather read it the other way round.
+params <- dns_dynamics_to_sim_params(dynamics, lambda = dns_result$parameters$lambda[1])
 initial_factors <- dns_result$parameters[1, c("beta1", "beta2", "beta3")]
 maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
 
@@ -85,17 +132,50 @@ print(yield_plots$yield_curves)
 
 The package leverages the YUIMA framework for accurate simulation of stochastic differential equations. This provides:
 
-- **Mathematical Rigor**: Proper implementation of numerical SDE schemes (Euler-Maruyama, Milstein)
+- **Mathematical Rigor**: Proper implementation of numerical SDE schemes
+  (Euler-Maruyama, Milstein). The DNS diffusion does not depend on the state,
+  so the two schemes coincide here; accuracy is set by `n_steps`.
 - **Correlation Handling**: Accurate simulation of correlated factors
 - **Statistical Estimation**: Advanced methods for parameter estimation
-- **Numerical Stability**: Better performance for longer time horizons
+
+The factor system is a linear SDE, so its transition law over any step is a
+known Gaussian. `engine = "exact"` samples that law directly — no
+discretisation error at any step size, no YUIMA dependency, and about two
+orders of magnitude faster than one `yuima::simulate()` call per path:
 
 ```r
-# Create a YUIMA model from DNS parameters for advanced analysis
+params <- list(
+  kappa = c(0.02, 0.3, 0.5),
+  theta = c(0.04, -0.02, 0.01),
+  sigma = c(0.005, 0.01, 0.02),
+  correlation = diag(3)
+)
+
+sim_result <- simulate_dns_yield_curves(
+  params = params,
+  initial_factors = c(0.045, -0.005, -0.015),
+  maturities = c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30),
+  n_paths = 1000,
+  engine = "exact"
+)
+```
+
+The default is still `engine = "yuima"`. The two agree in distribution, but
+they consume randomness differently, so a given seed does not reproduce the
+same paths across engines.
+
+YUIMA also provides the quasi-maximum-likelihood estimator, as an alternative
+to the regression in `estimate_dns_dynamics()`:
+
+```r
+# A YUIMA model object, for analysis the package does not wrap
 yuima_model <- dns_to_yuima_model(params)
 
-# Estimate parameters using advanced statistical methods
-est_result <- estimate_dns_parameters_yuima(factor_data, estimation_method = "qmle")
+# QMLE on the fitted factor series. A parameters frame can be passed straight
+# in; its beta1/beta2/beta3 columns are picked out by name.
+est_result <- estimate_dns_parameters_yuima(dns_result$parameters,
+                                            delta_t = 1 / 252)
+est_result$estimated_params
 ```
 
 ## The Nelson-Siegel Model
@@ -131,6 +211,14 @@ output can be themed, combined, or saved by the caller:
 | `plot_simulated_factors()` | Simulated factor paths |
 | `plot_simulated_yields()` | Simulated curves at selected horizons |
 
+## Data
+
+`treasury_yields` holds 1,501 daily U.S. Treasury curves across eleven
+maturities, 2 January 2019 to 31 December 2024, in decimal form. The source is
+FRED's H.15 constant maturity series (`DGS1MO` through `DGS30`), which are U.S.
+government works in the public domain. `data-raw/treasury_yields.R` rebuilds
+it.
+
 ## Documentation
 
 For detailed documentation and examples, see the package vignettes:
@@ -165,7 +253,7 @@ If you use `dnsr` in your research, please cite:
   title = {dnsr: Dynamic Nelson-Siegel Model in R},
   author = {Ariel R. H.},
   year = {2026},
-  note = {R package version 0.2.0},
+  note = {R package version 0.4.0},
   url = {https://github.com/ambientpointcorp/dnsr},
 }
 ```
@@ -181,4 +269,5 @@ If you use `dnsr` in your research, please cite:
 
 ## License
 
-MIT © Ambient Point Corp. See `LICENSE` for the full text.
+MIT © Ambient Point Corp. `LICENSE` carries the copyright stub R expects;
+`LICENSE.note` has the full text.
