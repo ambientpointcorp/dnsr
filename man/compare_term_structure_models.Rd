@@ -17,7 +17,9 @@ compare_term_structure_models(
 
 \item{date_to_compare}{Date. The specific date to compare models.}
 
-\item{models}{Character vector. Models to compare, from "NS", "NSS", "Svensson", "Spline".}
+\item{models}{Character vector. Models to compare, from "NS", "NSS",
+"Svensson", "Spline". The NSS column needs the \pkg{SmithWilson} package,
+which is not on CRAN; without it that model is skipped with a warning.}
 
 \item{spline_df}{Integer. Degrees of freedom for spline model.}
 

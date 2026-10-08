@@ -40,9 +40,6 @@ Suggests:
     yuima,
     mgcv,
     lattice,
-    plotly,
-    gganimate,
-    gifski,
-    SmithWilson
+    plotly
 Config/testthat/edition: 3
 VignetteBuilder: knitr

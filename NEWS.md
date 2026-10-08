@@ -71,6 +71,13 @@ its name, arguments or argument order.
   lists already returned: every element keeps its name, and `is.list()`, `$`
   and `checkmate::assert_list()` behave as before. Only the default display
   changes.
+* Dropped `SmithWilson` from Suggests: it is not available from CRAN, which
+  made the package's dependency set unsolvable and so broke every CI job the
+  moment CI existed. The NSS comparison in
+  `compare_term_structure_models()` was already guarded by
+  `requireNamespace()` and now says, when it skips, that the package has to be
+  installed by hand. Dropped `gganimate` and `gifski` too, which nothing has
+  referenced since `animate_yield_curves()` was removed.
 * `plot_yield_pca()` gains `scale`. `scale = FALSE` decomposes the covariance
   matrix rather than standardising each maturity first, which is the usual
   convention for yield curves and is what produces the familiar level, slope

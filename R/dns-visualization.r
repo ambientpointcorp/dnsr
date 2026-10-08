@@ -1241,7 +1241,9 @@ plot_yield_pca <- function(yield_data, n_components = 3,
 #'
 #' @param yield_data Data frame. Historical yield curve data with 'Date' column.
 #' @param date_to_compare Date. The specific date to compare models.
-#' @param models Character vector. Models to compare, from "NS", "NSS", "Svensson", "Spline".
+#' @param models Character vector. Models to compare, from "NS", "NSS",
+#'   "Svensson", "Spline". The NSS column needs the \pkg{SmithWilson} package,
+#'   which is not on CRAN; without it that model is skipped with a warning.
 #' @param spline_df Integer. Degrees of freedom for spline model.
 #' @param units Character. Units for the returned fit metrics: \code{"bp"}
 #'   (the default, basis points) or \code{"decimal"} (the units of the input
@@ -1370,7 +1372,11 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
   if ("NSS" %in% models || "Svensson" %in% models) {
     # Check if SmithWilson package is available
     if (!requireNamespace("SmithWilson", quietly = TRUE)) {
-      warning("Package 'SmithWilson' is required for NSS model. Skipping.")
+      # Not listed in Suggests: SmithWilson is not available from CRAN, so
+      # declaring it there makes the package's dependencies unsolvable. The
+      # NSS comparison is simply unavailable unless it is installed by hand.
+      warning("Package 'SmithWilson' is needed for the NSS model and is not ",
+              "on CRAN; install it manually to include that column. Skipping.")
     } else {
       # Fit NSS model
       tryCatch({
