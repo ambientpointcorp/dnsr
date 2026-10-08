@@ -8,7 +8,8 @@ estimate_dns_dynamics(
   params_df,
   min_observations = 20,
   dt = NULL,
-  sampling = c("monthly", "daily")
+  sampling = c("monthly", "daily"),
+  structure = c("diagonal", "full")
 )
 }
 \arguments{
@@ -29,6 +30,12 @@ month-end by construction, so a conflicting value is ignored with a warning.}
 \item{sampling}{Character. \code{"monthly"} (default) subsamples the factor
 series to its last observation per month before estimating; \code{"daily"}
 estimates on the series as given, preserving the pre-0.2.0 behavior.}
+
+\item{structure}{Character. \code{"diagonal"} (the default) estimates three
+independent Ornstein-Uhlenbeck processes with correlated innovations, as
+earlier versions did. \code{"full"} regresses each factor change on the
+levels of all three factors, giving the full mean-reversion matrix of the
+Diebold-Li VAR(1), in which a shock to one factor can pull the others.}
 }
 \value{
 A list containing:
@@ -41,12 +48,22 @@ A list containing:
 \item model: Fitted regression model
 \item half_life: Half-life of mean reversion (in days)
 \item summary: Basic statistics about the factor
+\item se: Standard errors of kappa, theta and sigma
+\item t_value: t statistics for kappa and theta against zero
+\item half_life_ci: 95 percent confidence interval for the half-life, in years
 }
 \item correlation: Correlation matrix of factor innovations
 \item innovations: Matrix of factor innovations (residuals from mean reversion)
 \item innovation_dates: Date vector aligned with the rows of innovations
 \item estimation_period: Date range used for estimation
 \item sampling, dt: The sampling mode and time step actually used
+\item structure: The mean-reversion structure estimated
+\item kappa_matrix: The 3 by 3 mean-reversion matrix. Diagonal under
+\code{structure = "diagonal"}; the estimated VAR(1) matrix under
+\code{"full"}
+\item theta_vector: Long-run means as a vector, named by factor
+\item eigenvalues, system_stability: Eigenvalues of \code{kappa_matrix} and
+whether every real part is positive
 }
 }
 \description{
@@ -70,12 +87,39 @@ resulting dynamics numerically unstable. Month-end sampling averages the
 noise down and recovers reversion speeds on the economically meaningful
 time scale. Subsampling is idempotent: passing an already month-end
 series through \code{sampling = "monthly"} reproduces it unchanged.
+
+Standard errors come from the fitted regression. For kappa the mapping from
+the slope is linear, so \eqn{se(\kappa) = se(b) / \Delta t}. For theta,
+which is a ratio of coefficients, they come from the delta method. The one
+for sigma is the asymptotic \eqn{\sigma / \sqrt{2(n-k)}}. Note that kappa
+carries a well-known upward small-sample bias of order \eqn{5 / T} in a
+sample of \eqn{T} years, which these standard errors do not capture: they
+describe the sampling noise, not the bias.
+
+With \code{structure = "full"} the system estimated is
+\deqn{\Delta\beta(t) = K(\theta - \beta(t-1))\Delta t + \Sigma\epsilon(t),}
+so each change is regressed on all three lagged levels. Writing the fitted
+intercepts as \eqn{a} and slopes as \eqn{B}, the mean-reversion matrix is
+\eqn{K = -B / \Delta t} and the long-run mean is
+\eqn{\theta = K^{-1} a / \Delta t}. The per-factor \code{kappa} entries
+then hold the diagonal of \eqn{K}; the cross terms are only in
+\code{kappa_matrix}, and \code{\link{simulate_dns_factors}} uses the
+diagonal.
 }
 \examples{
-\dontrun{
-yield_data <- get_treasury_yield_combined("2020-01-01")
-dns_result <- fit_dns_model(yield_data, n_days = 500)
+data(treasury_yields)
+dns_result <- fit_dns_model(treasury_yields, n_days = 750, show_progress = FALSE)
+
+# Month-end sampling by default
 dynamics <- estimate_dns_dynamics(dns_result$parameters)
-}
+dynamics
+
+# Standard errors show how weakly kappa is identified in a short sample
+dynamics$beta1$se
+dynamics$beta1$half_life_ci
+
+# The full VAR(1), in which a shock to one factor pulls the others
+full <- estimate_dns_dynamics(dns_result$parameters, structure = "full")
+round(full$kappa_matrix, 3)
 
 }
