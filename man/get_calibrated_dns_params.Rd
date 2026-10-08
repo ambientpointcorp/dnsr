@@ -9,7 +9,8 @@ get_calibrated_dns_params(
   lambda = NULL,
   start_date = NULL,
   end_date = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  api_key = NULL
 )
 }
 \arguments{
@@ -22,11 +23,15 @@ get_calibrated_dns_params(
 \item{end_date}{Date or character. End date for the data window.}
 
 \item{verbose}{Logical. If TRUE, print progress information.}
+
+\item{api_key}{Character. FRED API key, passed through to the data fetch. If
+NULL the \code{fred_api_key} environment variable is used.}
 }
 \value{
 A list containing:
 \itemize{
-\item params: List of DNS parameters for simulation
+\item params: List of DNS parameters for simulation, including the lambda
+actually fitted to the most recent curve
 \item initial_factors: Vector of current factor values
 \item lambda: Fitted lambda value
 \item calibration_summary: Summary statistics about the calibration

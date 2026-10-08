@@ -9,7 +9,8 @@ plot_yield_pca(
   n_components = 3,
   plot_weights = TRUE,
   plot_scores = TRUE,
-  plot_variance = TRUE
+  plot_variance = TRUE,
+  scale = TRUE
 )
 }
 \arguments{
@@ -22,6 +23,13 @@ plot_yield_pca(
 \item{plot_scores}{Logical. If TRUE, plot the scores (projections).}
 
 \item{plot_variance}{Logical. If TRUE, plot the explained variance.}
+
+\item{scale}{Logical. Whether to standardise each maturity's change series
+before the decomposition. \code{TRUE} is the default, preserving earlier
+behaviour. \code{FALSE} decomposes the covariance matrix instead, which is
+the usual convention for yield curves: it lets the more volatile
+maturities carry more weight, and is what gives the familiar level, slope
+and curvature shapes.}
 }
 \value{
 A list containing:
@@ -35,10 +43,12 @@ Performs Principal Component Analysis (PCA) on yield curve movements and
 visualizes the results.
 }
 \examples{
-\dontrun{
-yield_data <- get_treasury_yield_combined("2020-01-01")
-pca_result <- plot_yield_pca(yield_data)
-print(pca_result$plots$weights)
-}
+data(treasury_yields)
+
+# scale = FALSE decomposes the covariance matrix, the usual convention for
+# yield curves, which is what produces the level/slope/curvature shapes
+pca_result <- plot_yield_pca(treasury_yields, scale = FALSE)
+round(pca_result$var_explained[1:3], 4)
+pca_result$plots$weights
 
 }

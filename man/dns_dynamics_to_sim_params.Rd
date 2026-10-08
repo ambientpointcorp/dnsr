@@ -4,12 +4,18 @@
 \alias{dns_dynamics_to_sim_params}
 \title{Convert DNS Dynamics to Simulation Parameters}
 \usage{
-dns_dynamics_to_sim_params(dynamics, include_correlation = TRUE)
+dns_dynamics_to_sim_params(dynamics, include_correlation = TRUE, lambda = NULL)
 }
 \arguments{
 \item{dynamics}{List. The dynamics object from estimate_dns_dynamics().}
 
 \item{include_correlation}{Logical. If TRUE, include the correlation structure.}
+
+\item{lambda}{Numeric. The Nelson-Siegel decay parameter to carry into the
+simulation parameters. If NULL (the default) it is taken from
+\code{dynamics$lambda} when present, and otherwise falls back to 0.0609.
+\code{estimate_dns_dynamics()} does not estimate lambda, so pass the value
+fitted by \code{\link{fit_dns_model}} to avoid simulating off the default.}
 }
 \value{
 A list of parameters for DNS simulation.
@@ -17,12 +23,21 @@ A list of parameters for DNS simulation.
 \description{
 Converts the estimated DNS dynamics to parameters suitable for simulation.
 }
-\examples{
-\dontrun{
-yield_data <- get_treasury_yield_combined("2020-01-01")
-dns_result <- fit_dns_model(yield_data, n_days = 100)
-dynamics <- estimate_dns_dynamics(dns_result$parameters)
-sim_params <- dns_dynamics_to_sim_params(dynamics)
+\details{
+\code{kappa}, \code{theta} and \code{sigma} are the per-factor values, so a
+dynamics object estimated with \code{structure = "full"} contributes only
+the diagonal of its mean-reversion matrix here: \code{simulate_dns_factors()}
+reverts each factor to its own long-run mean. The full matrix is carried
+through as \code{kappa_matrix} for inspection.
 }
+\examples{
+data(treasury_yields)
+dns_result <- fit_dns_model(treasury_yields, n_days = 750, show_progress = FALSE)
+dynamics <- estimate_dns_dynamics(dns_result$parameters)
+
+# Pass the fitted lambda through, rather than leaving the 0.0609 default
+latest <- dns_result$parameters[which.max(dns_result$parameters$Date), ]
+sim_params <- dns_dynamics_to_sim_params(dynamics, lambda = latest$lambda)
+str(sim_params)
 
 }

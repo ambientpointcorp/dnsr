@@ -23,12 +23,10 @@ A list of ggplot objects:
 Creates plots of DNS factor time series and fit quality.
 }
 \examples{
-\dontrun{
-yield_data <- get_treasury_yield_combined("2020-01-01")
-dns_result <- fit_dns_model(yield_data, n_days = 100)
+data(treasury_yields)
+dns_result <- fit_dns_model(treasury_yields, n_days = 250, show_progress = FALSE)
 plots <- plot_factor_time_series(dns_result)
-print(plots$factors)
-print(plots$rmse)
-}
+plots$factors
+plots$rmse
 
 }

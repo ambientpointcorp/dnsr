@@ -7,31 +7,30 @@
 calculate_dns_yields(factors, maturities, lambda = 0.0609)
 }
 \arguments{
-\item{factors}{Array or matrix. If array: simulated factors \link{time, path, factor}.
-If matrix: factors for a single path \link{time, factor}.}
+\item{factors}{Array or matrix. If an array, simulated factors indexed by
+(time, path, factor); if a matrix, factors for a single path indexed by
+(time, factor).}
 
 \item{maturities}{Numeric vector. Maturities (in years) for the yield curve.}
 
 \item{lambda}{Numeric. DNS decay parameter lambda.}
 }
 \value{
-Matrix of yields with dimensions \link{time, maturity, path} if factors is an array,
-or \link{time, maturity} if factors is a matrix.
+Array of yields indexed by (time, maturity, path) if \code{factors} is
+an array, or a matrix indexed by (time, maturity) if it is a matrix.
 }
 \description{
 Calculates yield curves based on DNS factors for specified maturities.
 }
 \examples{
-\dontrun{
-params <- list(
-  kappa = c(0.02, 0.3, 0.5),
-  theta = c(0.04, -0.02, 0.01),
-  sigma = c(0.005, 0.01, 0.02)
-)
-initial_factors <- c(0.035, -0.015, 0.005)
-sim_result <- simulate_dns_factors(params, initial_factors)
 maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
-yield_curves <- calculate_dns_yields(sim_result$factors, maturities, 0.0609)
-}
+
+# A single curve: one row of (level, slope, curvature)
+factors <- matrix(c(0.035, -0.015, 0.005), nrow = 1)
+round(calculate_dns_yields(factors, maturities, 0.0609)[1, ], 5)
+
+# Three paths over four dates, as returned by simulate_dns_factors()
+paths <- array(rep(c(0.035, -0.015, 0.005), each = 12), dim = c(4, 3, 3))
+dim(calculate_dns_yields(paths, maturities, 0.0609))
 
 }

@@ -11,14 +11,18 @@ get_treasury_yield_data(
   end_date = NULL,
   convert_to_decimal = TRUE,
   verbose = FALSE,
-  fill_missing = TRUE
+  fill_missing = TRUE,
+  max_gap = Inf,
+  date_order = c("descending", "ascending"),
+  retries = 3L,
+  cache_dir = NULL
 )
 }
 \arguments{
 \item{api_key}{Character. FRED API key. If NULL, will look for fred_api_key environment variable.}
 
-\item{maturities}{Character vector. Maturities to download. Options include:
-"1MO", "3MO", "6MO", "1", "2", "3", "5", "7", "10", "20", "30"}
+\item{maturities}{Character vector. Maturities to download. Options are
+"1MO", "2MO", "3MO", "6MO", "1", "2", "3", "5", "7", "10", "20", "30".}
 
 \item{start_date}{Date or character in "YYYY-MM-DD" format. The earliest date to include.}
 
@@ -28,7 +32,22 @@ get_treasury_yield_data(
 
 \item{verbose}{Logical. If TRUE, print processing information.}
 
-\item{fill_missing}{Logical. If TRUE, attempt to fill in missing values using forward fill.}
+\item{fill_missing}{Logical, or one of \code{"forward"} / \code{"none"}. If TRUE
+(the default) gaps are filled by carrying the last observation forward in
+calendar time.}
+
+\item{max_gap}{Numeric. Maximum number of calendar days a value may be
+carried across when \code{fill_missing} is in effect. Gaps wider than this
+are left as \code{NA}. Defaults to \code{Inf}, which fills every gap.}
+
+\item{date_order}{Character. Row order of the returned frame:
+\code{"descending"} (the default, most recent first) or \code{"ascending"}.}
+
+\item{retries}{Integer. HTTP attempts per series, passed to
+\code{\link{fetch_fred_series}}.}
+
+\item{cache_dir}{Character. Directory in which to cache responses, passed to
+\code{\link{fetch_fred_series}}. \code{NULL} disables caching.}
 }
 \value{
 A data.frame with processed yield curve data where:
@@ -59,6 +78,13 @@ This function fetches data from FRED for the following series:
 }
 
 Requires a FRED API key which can be obtained free at https://fred.stlouisfed.org/docs/api/api_key.html
+
+Gap filling runs on an ascending date index, so a missing yield takes the
+value of the most recent \emph{earlier} observation. This matters because the
+frame is returned newest-first: filling in row order would carry values
+backwards in time and introduce look-ahead bias into anything calibrated on
+the result. Long series have genuine multi-year holes (DGS20 before 1993,
+DGS30 between 2002 and 2006); set \code{max_gap} to stop those being bridged.
 }
 \examples{
 \dontrun{

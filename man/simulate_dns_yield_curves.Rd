@@ -14,7 +14,8 @@ simulate_dns_yield_curves(
   n_paths = 100,
   include_correlation = TRUE,
   sim_method = "euler",
-  seed = NULL
+  seed = NULL,
+  engine = c("yuima", "exact")
 )
 }
 \arguments{
@@ -37,22 +38,25 @@ simulate_dns_yield_curves(
 \item{sim_method}{Character. Simulation method for YUIMA ("euler" or "milstein").}
 
 \item{seed}{Integer. Random seed for reproducibility.}
+
+\item{engine}{Character. \code{"yuima"} (the default) or \code{"exact"};
+see \code{\link{simulate_dns_factors}}.}
 }
 \value{
 A list containing:
 \itemize{
-\item yields: Array of simulated yields \link{time, maturity, path}
-\item factors: Array of simulated factors \link{time, path, factor}
+\item yields: Array of simulated yields, indexed by (time, maturity, path)
+\item factors: Array of simulated factors, indexed by (time, path, factor)
 \item time: Vector of time points
 \item maturities: Vector of maturities
 \item params: The input parameters
+\item sim_method, engine: The scheme and engine used
 }
 }
 \description{
 Simulates DNS yield curves using the YUIMA package for accurate SDE simulation.
 }
 \examples{
-\dontrun{
 params <- list(
   kappa = c(0.02, 0.3, 0.5),
   theta = c(0.04, -0.02, 0.01),
@@ -60,7 +64,10 @@ params <- list(
 )
 initial_factors <- c(0.035, -0.015, 0.005)
 maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
-sim_result <- simulate_dns_yield_curves(params, initial_factors, maturities)
-}
+
+sim_result <- simulate_dns_yield_curves(params, initial_factors, maturities,
+                                        n_paths = 50, engine = "exact",
+                                        seed = 1)
+sim_result
 
 }

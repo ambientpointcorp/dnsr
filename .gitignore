@@ -7,4 +7,10 @@
 *.Rproj
 .DS_Store
 inst/doc
+
+# stray knitr output if a vignette is knitted in the project root
+figure/
+cache/
+
+# pkgdown build output, generated from _pkgdown.yml
 docs

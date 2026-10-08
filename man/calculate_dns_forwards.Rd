@@ -25,16 +25,13 @@ The instantaneous forward rate in the DNS model is given by:
 \deqn{f(m) = \beta_1 + \beta_2 e^{-\lambda m} + \beta_3 \lambda m e^{-\lambda m}}
 }
 \examples{
-\dontrun{
-params <- list(
-  kappa = c(0.02, 0.3, 0.5),
-  theta = c(0.04, -0.02, 0.01),
-  sigma = c(0.005, 0.01, 0.02)
-)
-initial_factors <- c(0.035, -0.015, 0.005)
-sim_result <- simulate_dns_factors(params, initial_factors)
 maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
-forward_rates <- calculate_dns_forwards(sim_result$factors, maturities, 0.0609)
-}
+factors <- matrix(c(0.035, -0.015, 0.005), nrow = 1)
+
+# Forwards sit above spots where the curve is rising
+rbind(
+  spot = calculate_dns_yields(factors, maturities, 0.0609)[1, ],
+  forward = calculate_dns_forwards(factors, maturities, 0.0609)[1, ]
+)
 
 }

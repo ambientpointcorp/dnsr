@@ -9,7 +9,9 @@ fetch_fred_series(
   api_key = NULL,
   start_date = NULL,
   end_date = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  retries = 3L,
+  cache_dir = NULL
 )
 }
 \arguments{
@@ -22,6 +24,14 @@ fetch_fred_series(
 \item{end_date}{Date or character in "YYYY-MM-DD" format. The latest date to include.}
 
 \item{verbose}{Logical. If TRUE, print processing information.}
+
+\item{retries}{Integer. Number of attempts for the HTTP request. Transient
+failures and 5xx responses are retried with exponential backoff; a 4xx
+response (a bad key or series id) is not, since retrying cannot help.}
+
+\item{cache_dir}{Character. Directory in which to cache responses. If given,
+a request already on disk is read from there instead of being re-fetched.
+\code{NULL} (the default) disables caching.}
 }
 \value{
 A data.frame with date and yield value columns.
@@ -34,6 +44,11 @@ Downloads U.S. Treasury yield data for specific maturities from the Federal Rese
 \details{
 Requires a FRED API key which can be obtained free at https://fred.stlouisfed.org/docs/api/api_key.html
 Set the environment variable fred_api_key or pass it directly to the function.
+
+Cache files are keyed on the series id and the requested date range only.
+The API key is never part of the key and is never written to disk. A cache
+hit is served before the key is looked up, so a cached corpus can be
+replayed with no key configured at all.
 }
 \examples{
 \dontrun{

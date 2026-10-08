@@ -6,7 +6,7 @@
 #' @importFrom ggplot2 scale_fill_gradientn scale_x_continuous scale_y_continuous scale_y_date geom_text
 #' @importFrom ggplot2 annotate geom_ribbon sec_axis element_text element_blank
 #' @importFrom reshape2 melt
-#' @importFrom dplyr filter select mutate arrange
+#' @importFrom dplyr %>%
 #' @importFrom graphics par boxplot matplot
 #' @importFrom grDevices rainbow
 #' @importFrom stats quantile smooth.spline predict
@@ -25,12 +25,9 @@
 #' @return A ggplot object with the yield curve plots.
 #'
 #' @examples
-#' \dontrun{
-#' yield_data <- get_treasury_yield_combined("2020-01-01")
-#' dns_result <- fit_dns_model(yield_data, n_days = 30)
-#' p <- plot_yield_curves(yield_data, dns_result)
-#' print(p)
-#' }
+#' data(treasury_yields)
+#' dns_result <- fit_dns_model(treasury_yields, n_days = 30, show_progress = FALSE)
+#' plot_yield_curves(treasury_yields, dns_result, max_plots = 4)
 #'
 #' @export
 plot_yield_curves <- function(yield_data, dns_result, dates_to_plot = NULL,
@@ -49,11 +46,21 @@ plot_yield_curves <- function(yield_data, dns_result, dates_to_plot = NULL,
   checkmate::assert_count(max_plots, positive = TRUE)
   checkmate::assert_logical(show_rmse, len = 1)
 
-  # If no dates specified, use the first few dates
+  # Maturity columns, located by name rather than by position
+  mat_cols <- setdiff(names(yield_data), "Date")
+  maturities <- suppressWarnings(as.numeric(mat_cols))
+
+  # If no dates specified, use the first few dates common to both inputs.
+  # intersect() drops the Date class, so restore it explicitly: formatting a
+  # bare numeric date gives the day number, not a date.
   if (is.null(dates_to_plot)) {
-    all_dates <- intersect(yield_data$Date, dns_result$parameters$Date)
-    dates_to_plot <- all_dates[1:min(max_plots, length(all_dates))]
+    all_dates <- as.Date(
+      intersect(as.Date(yield_data$Date), as.Date(dns_result$parameters$Date)),
+      origin = "1970-01-01"
+    )
+    dates_to_plot <- all_dates[seq_len(min(max_plots, length(all_dates)))]
   }
+  dates_to_plot <- as.Date(dates_to_plot)
 
   # Handle case with no dates to plot
   if (length(dates_to_plot) == 0) {
@@ -62,72 +69,67 @@ plot_yield_curves <- function(yield_data, dns_result, dates_to_plot = NULL,
   }
 
   # Prepare data for plotting
-  plot_data <- data.frame()
-
-  # Get maturities
-  maturities <- as.numeric(colnames(yield_data)[-1])
+  curve_rows <- list()
+  rmse_rows <- list()
 
   # For each date, add actual and fitted yields
-  for (date in dates_to_plot) {
-    # Find row index for this date
-    date_idx <- which(yield_data$Date == date)
+  for (k in seq_along(dates_to_plot)) {
+    this_date <- dates_to_plot[k]
+    date_label <- format(this_date, "%Y-%m-%d")
 
-    if (length(date_idx) > 0) {
-      # Actual yields
-      actual_yields <- as.numeric(yield_data[date_idx, -1])
+    date_idx <- which(as.Date(yield_data$Date) == this_date)
+    if (length(date_idx) == 0) next
+    date_idx <- date_idx[1]
 
-      for (i in 1:length(maturities)) {
-        if (!is.na(actual_yields[i])) {
-          plot_data <- rbind(
-            plot_data,
-            data.frame(
-              date = as.character(date),
-              maturity = maturities[i],
-              yield = actual_yields[i] * 100,  # Convert to percentage
-              type = "Actual"
-            )
-          )
-        }
-      }
+    actual_yields <- as.numeric(yield_data[date_idx, mat_cols])
+    keep <- !is.na(actual_yields)
+    if (any(keep)) {
+      curve_rows[[length(curve_rows) + 1L]] <- data.frame(
+        date = date_label,
+        maturity = maturities[keep],
+        yield = actual_yields[keep] * 100,  # Convert to percentage
+        type = "Actual",
+        stringsAsFactors = FALSE
+      )
+    }
 
-      # Fitted yields (if available)
-      dns_date_idx <- which(dns_result$parameters$Date == date)
-      if (length(dns_date_idx) > 0) {
-        # Get RMSE for this date
-        rmse_bp <- dns_result$parameters$rmse[dns_date_idx] * 10000  # Convert to basis points
+    # Fitted yields (if available)
+    dns_date_idx <- which(as.Date(dns_result$parameters$Date) == this_date)
+    if (length(dns_date_idx) == 0) next
+    dns_date_idx <- dns_date_idx[1]
 
-        # Get fitted yields
-        fitted_yields <- dns_result$fitted_yields[dns_date_idx, ]
+    rmse_bp <- dns_result$parameters$rmse[dns_date_idx] * 10000  # basis points
+    fitted_yields <- as.numeric(dns_result$fitted_yields[dns_date_idx, ])
 
-        for (i in 1:length(maturities)) {
-          if (!is.na(fitted_yields[i])) {
-            plot_data <- rbind(
-              plot_data,
-              data.frame(
-                date = as.character(date),
-                maturity = maturities[i],
-                yield = fitted_yields[i] * 100,  # Convert to percentage
-                type = "Fitted"
-              )
-            )
-          }
-        }
+    keep_fit <- !is.na(fitted_yields)
+    if (any(keep_fit)) {
+      curve_rows[[length(curve_rows) + 1L]] <- data.frame(
+        date = date_label,
+        maturity = maturities[keep_fit],
+        yield = fitted_yields[keep_fit] * 100,  # Convert to percentage
+        type = "Fitted",
+        stringsAsFactors = FALSE
+      )
+    }
 
-        # Add RMSE annotation if requested
-        if (show_rmse) {
-          plot_data <- rbind(
-            plot_data,
-            data.frame(
-              date = as.character(date),
-              maturity = max(maturities, na.rm = TRUE),
-              yield = max(c(actual_yields, fitted_yields), na.rm = TRUE) * 100,
-              type = sprintf("RMSE: %.1f bp", rmse_bp)
-            )
-          )
-        }
+    # RMSE annotations live in their own layer, so they do not become a
+    # colour level that the manual scale has to carry.
+    if (show_rmse) {
+      all_vals <- c(actual_yields, fitted_yields)
+      if (any(!is.na(all_vals))) {
+        rmse_rows[[length(rmse_rows) + 1L]] <- data.frame(
+          date = date_label,
+          maturity = max(maturities, na.rm = TRUE),
+          yield = max(all_vals, na.rm = TRUE) * 100,
+          label = sprintf("RMSE: %.1f bp", rmse_bp),
+          stringsAsFactors = FALSE
+        )
       }
     }
   }
+
+  plot_data <- if (length(curve_rows)) do.call(rbind, curve_rows) else data.frame()
+  rmse_data <- if (length(rmse_rows)) do.call(rbind, rmse_rows) else NULL
 
   # Check if we have data to plot
   if (nrow(plot_data) == 0) {
@@ -135,84 +137,50 @@ plot_yield_curves <- function(yield_data, dns_result, dates_to_plot = NULL,
     return(NULL)
   }
 
-  # Create plot
-  if (show_rmse) {
-    # Create helper column for plotting
-    plot_data$plot_group <- plot_data$type
-    plot_data$plot_group[grepl("RMSE", plot_data$type)] <- "Annotation"
+  # Facet in calendar order, not alphabetically by label
+  date_levels <- format(sort(unique(dates_to_plot)), "%Y-%m-%d")
+  plot_data$date <- factor(plot_data$date, levels = date_levels)
+  plot_data$date <- droplevels(plot_data$date)
+  if (!is.null(rmse_data)) {
+    rmse_data$date <- factor(rmse_data$date, levels = levels(plot_data$date))
+  }
 
-    # Base plot
-    p <- ggplot(
-      plot_data,
-      aes(
-        x = maturity,
-        y = yield,
-        color = type,
-        linetype = plot_group,
-        group = interaction(date, type)
-      )
+  # Create plot
+  p <- ggplot(
+    plot_data,
+    aes(
+      x = maturity,
+      y = yield,
+      color = type,
+      linetype = type,
+      group = interaction(date, type)
+    )
+  ) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ date) +
+    labs(
+      title = "Treasury Yield Curves and DNS Model Fits",
+      x = "Maturity (years)",
+      y = "Yield (%)",
+      color = "Type",
+      linetype = "Type"
     ) +
-      geom_line() +
-      geom_point(data = plot_data[plot_data$type %in% c("Actual", "Fitted"), ]) +
-      # Add RMSE as text annotation
-      geom_text(
-        data = plot_data[grepl("RMSE", plot_data$type), ],
-        aes(label = type),
-        hjust = 1,
-        vjust = 1,
-        size = 3,
-        show.legend = FALSE
-      ) +
-      facet_wrap(~ date) +
-      labs(
-        title = "Treasury Yield Curves and DNS Model Fits",
-        x = "Maturity (years)",
-        y = "Yield (%)"
-      ) +
-      scale_color_manual(
-        values = c(
-          "Actual" = "blue",
-          "Fitted" = "red",
-          "RMSE: 0.1 bp" = "transparent"
-        ),
-        name = "Type"
-      ) +
-      scale_linetype_manual(
-        values = c(
-          "Actual" = "solid",
-          "Fitted" = "dashed",
-          "Annotation" = "blank"
-        ),
-        guide = "none"
-      ) +
-      theme_minimal() +
-      theme(legend.position = "bottom")
-  } else {
-    # Simpler plot without RMSE
-    p <- ggplot(
-      plot_data,
-      aes(
-        x = maturity,
-        y = yield,
-        color = type,
-        linetype = type,
-        group = interaction(date, type)
-      )
-    ) +
-      geom_line() +
-      geom_point() +
-      facet_wrap(~ date) +
-      labs(
-        title = "Treasury Yield Curves and DNS Model Fits",
-        x = "Maturity (years)",
-        y = "Yield (%)",
-        color = "Type",
-        linetype = "Type"
-      ) +
-      scale_color_manual(values = c("Actual" = "blue", "Fitted" = "red")) +
-      scale_linetype_manual(values = c("Actual" = "solid", "Fitted" = "dashed")) +
-      theme_minimal() +
-      theme(legend.position = "bottom")
+    scale_color_manual(values = c("Actual" = "blue", "Fitted" = "red")) +
+    scale_linetype_manual(values = c("Actual" = "solid", "Fitted" = "dashed")) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+
+  if (show_rmse && !is.null(rmse_data)) {
+    p <- p + geom_text(
+      data = rmse_data,
+      aes(x = maturity, y = yield, label = label),
+      inherit.aes = FALSE,
+      hjust = 1,
+      vjust = 1,
+      size = 3,
+      show.legend = FALSE
+    )
   }
 
   return(p)
@@ -232,13 +200,11 @@ plot_yield_curves <- function(yield_data, dns_result, dates_to_plot = NULL,
 #'   - changes: Plot of factor changes (if show_changes = TRUE)
 #'
 #' @examples
-#' \dontrun{
-#' yield_data <- get_treasury_yield_combined("2020-01-01")
-#' dns_result <- fit_dns_model(yield_data, n_days = 100)
+#' data(treasury_yields)
+#' dns_result <- fit_dns_model(treasury_yields, n_days = 250, show_progress = FALSE)
 #' plots <- plot_factor_time_series(dns_result)
-#' print(plots$factors)
-#' print(plots$rmse)
-#' }
+#' plots$factors
+#' plots$rmse
 #'
 #' @export
 plot_factor_time_series <- function(dns_result, show_changes = FALSE) {
@@ -264,9 +230,9 @@ plot_factor_time_series <- function(dns_result, show_changes = FALSE) {
 
   # Create factor labels
   factor_labels <- c(
-    beta1 = "Level (β₁)",
-    beta2 = "Slope (β₂)",
-    beta3 = "Curvature (β₃)"
+    beta1 = "Level (\u03b2\u2081)",
+    beta2 = "Slope (\u03b2\u2082)",
+    beta3 = "Curvature (\u03b2\u2083)"
   )
 
   # Plot factors
@@ -308,9 +274,9 @@ plot_factor_time_series <- function(dns_result, show_changes = FALSE) {
 
     # Create change labels
     change_labels <- c(
-      beta1_change = "Level (β₁) Change",
-      beta2_change = "Slope (β₂) Change",
-      beta3_change = "Curvature (β₃) Change"
+      beta1_change = "Level (\u03b2\u2081) Change",
+      beta2_change = "Slope (\u03b2\u2082) Change",
+      beta3_change = "Curvature (\u03b2\u2083) Change"
     )
 
     # Plot changes
@@ -346,17 +312,17 @@ plot_factor_time_series <- function(dns_result, show_changes = FALSE) {
 #' @return A list of ggplot objects, one for each factor.
 #'
 #' @examples
-#' \dontrun{
 #' params <- list(
 #'   kappa = c(0.02, 0.3, 0.5),
 #'   theta = c(0.04, -0.02, 0.01),
 #'   sigma = c(0.005, 0.01, 0.02)
 #' )
-#' initial_factors <- c(0.035, -0.015, 0.005)
-#' sim_result <- simulate_dns_factors(params, initial_factors)
+#' sim_result <- simulate_dns_factors(params, c(0.035, -0.015, 0.005),
+#'                                    n_paths = 50, engine = "exact", seed = 1)
 #' plots <- plot_simulated_factors(sim_result)
-#' print(plots$level)
-#' }
+#' plots$level
+#'
+#' plot_simulated_factors(sim_result, plot_trajectories = TRUE)$level
 #'
 #' @export
 plot_simulated_factors <- function(sim_result, path_subset = NULL,
@@ -390,24 +356,21 @@ plot_simulated_factors <- function(sim_result, path_subset = NULL,
 
   # Create a list to store plots
   plots <- list()
-  factor_colors <- c("blue", "red", "green")
 
   # Generate plots for each factor
   for (f in 1:3) {
     factor_name <- factor_names[f]
 
     if (plot_trajectories) {
-      # Plot individual trajectories
-      plot_data <- data.frame()
-
-      for (p in path_subset) {
-        path_data <- data.frame(
-          Time = time,
-          Value = factors[, p, f],
-          Path = paste("Path", p)
-        )
-        plot_data <- rbind(plot_data, path_data)
-      }
+      # Plot individual trajectories. Built in one shot: as.vector() on the
+      # path slice is column-major, so time varies fastest within each path,
+      # which is the order the per-path loop produced.
+      plot_data <- data.frame(
+        Time = rep(time, length(path_subset)),
+        Value = as.vector(factors[, path_subset, f, drop = FALSE]),
+        Path = rep(paste("Path", path_subset), each = length(time)),
+        stringsAsFactors = FALSE
+      )
 
       plots[[tolower(factor_name)]] <- ggplot(
         plot_data,
@@ -422,11 +385,14 @@ plot_simulated_factors <- function(sim_result, path_subset = NULL,
         theme_minimal()
 
     } else {
-      # Calculate summary statistics for each time point
-      means <- apply(factors[, , f], 1, mean)
-      medians <- apply(factors[, , f], 1, median)
-      q10 <- apply(factors[, , f], 1, function(x) quantile(x, 0.1))
-      q90 <- apply(factors[, , f], 1, function(x) quantile(x, 0.9))
+      # Calculate summary statistics for each time point. The explicit
+      # matrix() keeps a single-path simulation two-dimensional: factors[, , f]
+      # drops to a vector when n_paths == 1 and apply() rejects it.
+      factor_paths <- matrix(factors[, , f], nrow = n_times, ncol = n_paths)
+      means <- apply(factor_paths, 1, mean)
+      medians <- apply(factor_paths, 1, stats::median)
+      q10 <- apply(factor_paths, 1, function(x) quantile(x, 0.1))
+      q90 <- apply(factor_paths, 1, function(x) quantile(x, 0.9))
 
       # Create data for the mean path
       mean_data <- data.frame(
@@ -484,18 +450,18 @@ plot_simulated_factors <- function(sim_result, path_subset = NULL,
 #'   - forwards: Plot of forward curves (if show_forwards = TRUE)
 #'
 #' @examples
-#' \dontrun{
 #' params <- list(
 #'   kappa = c(0.02, 0.3, 0.5),
 #'   theta = c(0.04, -0.02, 0.01),
 #'   sigma = c(0.005, 0.01, 0.02)
 #' )
-#' initial_factors <- c(0.035, -0.015, 0.005)
 #' maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
-#' sim_result <- simulate_dns_yield_curves(params, initial_factors, maturities)
-#' plots <- plot_simulated_yields(sim_result, time_points = c(0, 1, 5, 10))
-#' print(plots$yield_curves)
-#' }
+#' sim_result <- simulate_dns_yield_curves(params, c(0.035, -0.015, 0.005),
+#'                                         maturities, n_paths = 50,
+#'                                         engine = "exact", seed = 1)
+#'
+#' # Facets follow the calendar, so Year 10 comes after Year 5
+#' plot_simulated_yields(sim_result, time_points = c(0, 1, 5, 10))$yield_curves
 #'
 #' @export
 plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
@@ -520,6 +486,11 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
     time_indices[i] <- which.min(abs(time - time_points[i]))
   }
 
+  # Facet labels, as a factor in time_points order. Left as character these
+  # sort lexically, which puts "Year 10" between "Year 1" and "Year 5".
+  time_labels <- paste("Year", round(time[time_indices], 1))
+  time_levels <- unique(time_labels)
+
   # Create a list to store plots
   plots <- list()
 
@@ -534,27 +505,21 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
     path_subset <- 1:min(5, n_paths)
   }
 
-  # Plot yield curves at specified time points
-  plot_data <- data.frame()
-
-  for (t_idx in seq_along(time_indices)) {
-    t <- time_indices[t_idx]
-    t_value <- time[t]
-
-    for (p in path_subset) {
-      for (m in seq_along(maturities)) {
-        plot_data <- rbind(
-          plot_data,
-          data.frame(
-            Time = paste("Year", round(t_value, 1)),
-            Maturity = maturities[m],
-            Yield = yields[t, m, p] * 100,  # Convert to percentage
-            Path = paste("Path", p)
-          )
-        )
-      }
-    }
-  }
+  # Plot yield curves at specified time points. expand.grid() varies its first
+  # argument fastest, so this reproduces the maturity-inner, path-middle,
+  # time-outer order of the nested loops it replaces.
+  grid_y <- expand.grid(
+    m = seq_along(maturities), p = seq_along(path_subset),
+    t = seq_along(time_indices), KEEP.OUT.ATTRS = FALSE
+  )
+  plot_data <- data.frame(
+    Time = factor(time_labels[grid_y$t], levels = time_levels),
+    Maturity = maturities[grid_y$m],
+    Yield = yields[cbind(time_indices[grid_y$t], grid_y$m,
+                         path_subset[grid_y$p])] * 100,  # Convert to percentage
+    Path = paste("Path", path_subset[grid_y$p]),
+    stringsAsFactors = FALSE
+  )
 
   # Create yield curve plot
   plots$yield_curves <- ggplot(
@@ -582,29 +547,31 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
     # Calculate statistics across paths
     t_idx <- time_indices[1]
 
-    # Create data for term structure evolution
-    term_data <- data.frame()
+    # Create data for term structure evolution. Statistics are collected into
+    # (time x maturity) matrices, then the frame is built once.
+    stat_means <- matrix(NA_real_, n_times, length(maturities))
+    stat_q10 <- stat_means
+    stat_q90 <- stat_means
 
     for (m in seq_along(maturities)) {
-      yields_at_m <- yields[, m, ]
+      # matrix() keeps this two-dimensional when n_paths == 1
+      yields_at_m <- matrix(yields[, m, ], nrow = n_times, ncol = n_paths)
 
-      means <- apply(yields_at_m, 1, mean)
-      q10 <- apply(yields_at_m, 1, function(x) quantile(x, 0.1))
-      q90 <- apply(yields_at_m, 1, function(x) quantile(x, 0.9))
-
-      for (t in 1:n_times) {
-        term_data <- rbind(
-          term_data,
-          data.frame(
-            Time = time[t],
-            Maturity = paste(maturities[m], "yr"),
-            Mean = means[t] * 100,
-            Q10 = q10[t] * 100,
-            Q90 = q90[t] * 100
-          )
-        )
-      }
+      stat_means[, m] <- apply(yields_at_m, 1, mean)
+      stat_q10[, m] <- apply(yields_at_m, 1, function(x) quantile(x, 0.1))
+      stat_q90[, m] <- apply(yields_at_m, 1, function(x) quantile(x, 0.9))
     }
+
+    grid_ts <- expand.grid(t = seq_len(n_times), m = seq_along(maturities),
+                           KEEP.OUT.ATTRS = FALSE)
+    term_data <- data.frame(
+      Time = time[grid_ts$t],
+      Maturity = paste(maturities[grid_ts$m], "yr"),
+      Mean = as.vector(stat_means) * 100,
+      Q10 = as.vector(stat_q10) * 100,
+      Q90 = as.vector(stat_q90) * 100,
+      stringsAsFactors = FALSE
+    )
 
     # Create term structure evolution plot
     plots$term_structure <- ggplot(
@@ -642,27 +609,15 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
       lambda = if ("lambda" %in% names(sim_result)) sim_result$lambda else 0.0609
     )
 
-    # Prepare data
-    forward_data <- data.frame()
-
-    for (t_idx in seq_along(time_indices)) {
-      t <- time_indices[t_idx]
-      t_value <- time[t]
-
-      for (p in path_subset) {
-        for (m in seq_along(maturities)) {
-          forward_data <- rbind(
-            forward_data,
-            data.frame(
-              Time = paste("Year", round(t_value, 1)),
-              Maturity = maturities[m],
-              Forward = forwards[t, m, p] * 100,  # Convert to percentage
-              Path = paste("Path", p)
-            )
-          )
-        }
-      }
-    }
+    # Prepare data, on the same grid as the yield panel above
+    forward_data <- data.frame(
+      Time = factor(time_labels[grid_y$t], levels = time_levels),
+      Maturity = maturities[grid_y$m],
+      Forward = forwards[cbind(time_indices[grid_y$t], grid_y$m,
+                               path_subset[grid_y$p])] * 100,  # to percentage
+      Path = paste("Path", path_subset[grid_y$p]),
+      stringsAsFactors = FALSE
+    )
 
     # Create forward curve plot
     plots$forwards <- ggplot(
@@ -701,11 +656,10 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
 #' @return A ggplot object with the factor loadings plot.
 #'
 #' @examples
-#' \dontrun{
-#' maturities <- seq(0, 30, length.out = 100)
-#' p <- plot_dns_loadings(maturities)
-#' print(p)
-#' }
+#' plot_dns_loadings()
+#'
+#' # A faster decay concentrates the curvature loading at shorter maturities
+#' plot_dns_loadings(lambda = 0.4)
 #'
 #' @export
 plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
@@ -723,21 +677,9 @@ plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
     Curvature = numeric(length(maturities))
   )
 
-  for (i in seq_along(maturities)) {
-    m <- maturities[i]
-
-    # Handle numerical stability for very small maturities
-    if (m * lambda < 1e-10) {
-      loading_2 <- 1.0
-      loading_3 <- 0.0
-    } else {
-      loading_2 <- (1 - exp(-lambda * m)) / (lambda * m)
-      loading_3 <- loading_2 - exp(-lambda * m)
-    }
-
-    loading_data$Slope[i] <- loading_2
-    loading_data$Curvature[i] <- loading_3
-  }
+  loadings <- ns_loadings(maturities, lambda)
+  loading_data$Slope <- loadings[, 1]
+  loading_data$Curvature <- loadings[, 2]
 
   # Convert to long format for plotting
   loading_long <- reshape2::melt(
@@ -749,10 +691,10 @@ plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
 
   # Create plot
   p <- ggplot(loading_long, aes(x = Maturity, y = Loading, color = Factor)) +
-    geom_line(size = 1) +
+    geom_line(linewidth = 1) +
     labs(
       title = "DNS Model Factor Loadings",
-      subtitle = paste("λ =", lambda),
+      subtitle = paste("\u03bb =", lambda),
       x = "Maturity (years)",
       y = "Loading",
       color = "Factor"
@@ -778,7 +720,7 @@ plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
         max(loading_data$Curvature)
       ),
       Factor = c("Level", "Slope", "Curvature"),
-      Label = c("Level (β₁)", "Slope (β₂)", "Curvature (β₃)")
+      Label = c("Level (\u03b2\u2081)", "Slope (\u03b2\u2082)", "Curvature (\u03b2\u2083)")
     )
 
     p <- p + geom_text(
@@ -807,11 +749,11 @@ plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
 #' @return A ggplot object with the heat map.
 #'
 #' @examples
-#' \dontrun{
-#' yield_data <- get_treasury_yield_combined("2020-01-01")
-#' p <- plot_yield_heatmap(yield_data)
-#' print(p)
-#' }
+#' data(treasury_yields)
+#' plot_yield_heatmap(treasury_yields)
+#'
+#' # Most recent dates at the top
+#' plot_yield_heatmap(treasury_yields, reverse_time = TRUE)
 #'
 #' @importFrom ggplot2 geom_tile scale_fill_gradientn scale_x_continuous scale_y_date
 #'
@@ -840,9 +782,14 @@ plot_yield_heatmap <- function(yield_data, reverse_time = FALSE,
     title_prefix <- "Daily Yield Changes"
     legend_label <- "Change (%)"
   } else if (plot_type == "curvature") {
+    # A centred second difference needs an interior point to sit on.
+    if (length(maturities) < 3) {
+      stop("plot_type = \"curvature\" needs at least 3 maturities; ",
+           "yield_data has ", length(maturities), ".")
+    }
     # Calculate curvature (2nd derivative approximation)
     yield_curvature <- yield_data
-    for (i in 2:(length(maturities) - 1)) {
+    for (i in seq.int(2, length(maturities) - 1)) {
       col <- names(yield_data)[i + 1]
       col_prev <- names(yield_data)[i]
       col_next <- names(yield_data)[i + 2]
@@ -851,7 +798,7 @@ plot_yield_heatmap <- function(yield_data, reverse_time = FALSE,
       m_next <- maturities[i + 1]
 
       # Centered finite difference approximation
-      # f''(x) ≈ (f(x+h) - 2f(x) + f(x-h)) / h^2
+      # f''(x) ~= (f(x+h) - 2f(x) + f(x-h)) / h^2
       # Adjust for non-uniform grid
       h1 <- m - m_prev
       h2 <- m_next - m
@@ -876,10 +823,16 @@ plot_yield_heatmap <- function(yield_data, reverse_time = FALSE,
     legend_label <- "Yield (%)"
   }
 
-  # Make sure all values are in percentage for display
-  for (col in names(plot_df)[-1]) {
-    if (max(plot_df[[col]], na.rm = TRUE) < 1 && plot_type == "yields") {
-      plot_df[[col]] <- plot_df[[col]] * 100
+  # Rescale to percent for display. The decision is made once, from the whole
+  # frame: taken per column it could scale the short end and not the long end,
+  # putting two different units on one heatmap.
+  if (plot_type == "yields") {
+    value_cols <- setdiff(names(plot_df), "Date")
+    overall_max <- suppressWarnings(
+      max(unlist(plot_df[value_cols]), na.rm = TRUE)
+    )
+    if (is.finite(overall_max) && overall_max < 1) {
+      for (col in value_cols) plot_df[[col]] <- plot_df[[col]] * 100
     }
   }
 
@@ -940,9 +893,12 @@ plot_yield_heatmap <- function(yield_data, reverse_time = FALSE,
       legend.position = "right"
     )
 
-  # Reverse time axis if requested
+  # Reverse the date axis if requested. scale_y_reverse() cannot be used here:
+  # it negates the variable, and unary minus is undefined for Date. Reversed
+  # limits on the coordinate system flip the axis and keep date labels.
   if (reverse_time) {
-    p <- p + scale_y_date()
+    date_range <- range(plot_data$Date, na.rm = TRUE)
+    p <- p + ggplot2::coord_cartesian(ylim = rev(date_range))
   }
 
   return(p)
@@ -962,8 +918,9 @@ plot_yield_heatmap <- function(yield_data, reverse_time = FALSE,
 #'
 #' @examples
 #' \dontrun{
-#' yield_data <- get_treasury_yield_combined("2020-01-01")
-#' plot_yield_surface(yield_data)
+#' # Needs plotly (interactive) or lattice (static)
+#' data(treasury_yields)
+#' plot_yield_surface(treasury_yields)
 #' }
 #'
 #' @export
@@ -1077,25 +1034,34 @@ plot_yield_surface <- function(yield_data, interactive = TRUE,
 #' @param plot_weights Logical. If TRUE, plot the loadings (eigenvectors).
 #' @param plot_scores Logical. If TRUE, plot the scores (projections).
 #' @param plot_variance Logical. If TRUE, plot the explained variance.
+#' @param scale Logical. Whether to standardise each maturity's change series
+#'   before the decomposition. \code{TRUE} is the default, preserving earlier
+#'   behaviour. \code{FALSE} decomposes the covariance matrix instead, which is
+#'   the usual convention for yield curves: it lets the more volatile
+#'   maturities carry more weight, and is what gives the familiar level, slope
+#'   and curvature shapes.
 #'
 #' @return A list containing:
 #'   - pca: The PCA result object
 #'   - plots: A list of created plots
 #'
 #' @examples
-#' \dontrun{
-#' yield_data <- get_treasury_yield_combined("2020-01-01")
-#' pca_result <- plot_yield_pca(yield_data)
-#' print(pca_result$plots$weights)
-#' }
+#' data(treasury_yields)
+#'
+#' # scale = FALSE decomposes the covariance matrix, the usual convention for
+#' # yield curves, which is what produces the level/slope/curvature shapes
+#' pca_result <- plot_yield_pca(treasury_yields, scale = FALSE)
+#' round(pca_result$var_explained[1:3], 4)
+#' pca_result$plots$weights
 #'
 #' @importFrom stats prcomp
 #'
 #' @export
 plot_yield_pca <- function(yield_data, n_components = 3,
                            plot_weights = TRUE, plot_scores = TRUE,
-                           plot_variance = TRUE) {
+                           plot_variance = TRUE, scale = TRUE) {
   # Parameter validation
+  checkmate::assert_logical(scale, len = 1)
   checkmate::assert_data_frame(yield_data)
   checkmate::assert_names(names(yield_data), must.include = "Date")
   checkmate::assert_count(n_components, positive = TRUE)
@@ -1125,10 +1091,14 @@ plot_yield_pca <- function(yield_data, n_components = 3,
   yield_changes <- apply(yields, 2, diff)
 
   # Perform PCA on yield changes
-  pca_result <- prcomp(yield_changes, scale. = TRUE)
+  pca_result <- prcomp(yield_changes, scale. = scale)
 
   # Limit to requested number of components
   n_components <- min(n_components, ncol(pca_result$rotation))
+
+  # Computed once here: it is part of the return value, so it must exist even
+  # when every plot_* flag is FALSE.
+  var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
 
   # Create a list to store plots
   plots <- list()
@@ -1146,7 +1116,6 @@ plot_yield_pca <- function(yield_data, n_components = 3,
     )
 
     # Create component labels with variance explained
-    var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
     component_labels <- sprintf(
       "PC%d (%.1f%%)",
       1:n_components,
@@ -1158,7 +1127,7 @@ plot_yield_pca <- function(yield_data, n_components = 3,
       weights_data,
       aes(x = Maturity, y = Weight, color = Component)
     ) +
-      geom_line(size = 1) +
+      geom_line(linewidth = 1) +
       geom_point() +
       labs(
         title = "PCA Components of Yield Curve Movements",
@@ -1195,7 +1164,6 @@ plot_yield_pca <- function(yield_data, n_components = 3,
     )
 
     # Create component labels with variance explained
-    var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
     component_labels <- sprintf(
       "PC%d (%.1f%%)",
       1:n_components,
@@ -1225,7 +1193,6 @@ plot_yield_pca <- function(yield_data, n_components = 3,
   # Plot explained variance
   if (plot_variance) {
     # Calculate explained variance
-    var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
     cum_var_explained <- cumsum(var_explained)
 
     # Prepare data for plotting
@@ -1241,7 +1208,7 @@ plot_yield_pca <- function(yield_data, n_components = 3,
     # Create plot
     plots$variance <- ggplot(variance_data, aes(x = Component)) +
       geom_bar(aes(y = Variance), stat = "identity", fill = "steelblue") +
-      geom_line(aes(y = Cumulative, group = 1), color = "red", size = 1) +
+      geom_line(aes(y = Cumulative, group = 1), color = "red", linewidth = 1) +
       geom_point(aes(y = Cumulative), color = "red", size = 3) +
       labs(
         title = "Explained Variance by Principal Components",
@@ -1276,27 +1243,44 @@ plot_yield_pca <- function(yield_data, n_components = 3,
 #' @param date_to_compare Date. The specific date to compare models.
 #' @param models Character vector. Models to compare, from "NS", "NSS", "Svensson", "Spline".
 #' @param spline_df Integer. Degrees of freedom for spline model.
+#' @param units Character. Units for the returned fit metrics: \code{"bp"}
+#'   (the default, basis points) or \code{"decimal"} (the units of the input
+#'   yields).
 #'
 #' @return A list containing:
 #'   - plot: A ggplot object with model comparisons
-#'   - metrics: A data frame with fit metrics for each model
+#'   - metrics: A data frame with RMSE, MAE and MaxError for each model, in
+#'     \code{units}
+#'
+#' @details
+#' Decimal yields scale to basis points by 10,000, matching
+#' \code{\link{fit_dns_model}} and \code{\link{plot_factor_time_series}}.
+#' Maturities with no observed yield on \code{date_to_compare} are excluded
+#' from every model's fit and from the metrics.
 #'
 #' @examples
-#' \dontrun{
-#' yield_data <- get_treasury_yield_combined("2023-01-01")
-#' comparison <- compare_term_structure_models(yield_data, Sys.Date() - 30)
-#' print(comparison$plot)
-#' }
+#' data(treasury_yields)
+#'
+#' # Errors are in basis points
+#' comparison <- compare_term_structure_models(treasury_yields,
+#'                                             models = c("NS", "Spline"))
+#' comparison$metrics
+#' comparison$plot
 #'
 #' @export
 compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
                                           models = c("NS", "NSS", "Spline"),
-                                          spline_df = 5) {
+                                          spline_df = 5,
+                                          units = c("bp", "decimal")) {
   # Parameter validation
+  units <- match.arg(units)
   checkmate::assert_data_frame(yield_data)
   checkmate::assert_names(names(yield_data), must.include = "Date")
   checkmate::assert_subset(models, c("NS", "NSS", "Svensson", "Spline"))
   checkmate::assert_count(spline_df, positive = TRUE)
+
+  # Decimal yields scale to basis points by 10,000.
+  err_scale <- if (identical(units, "bp")) 10000 else 1
 
   # Select date to compare (default to most recent)
   if (is.null(date_to_compare)) {
@@ -1321,9 +1305,25 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
     stop("Selected date not found in data")
   }
 
-  # Extract yield data for the selected date
-  yields <- as.numeric(yield_data[date_idx, -1])
-  maturities <- as.numeric(colnames(yield_data)[-1])
+  # Extract yield data for the selected date. Maturities with no observation
+  # are dropped up front: every fitter below would otherwise either error or
+  # silently return a vector shorter than the maturity grid.
+  mat_cols <- setdiff(names(yield_data), "Date")
+  yields <- as.numeric(yield_data[date_idx[1], mat_cols])
+  maturities <- suppressWarnings(as.numeric(mat_cols))
+
+  observed <- !is.na(yields) & !is.na(maturities) & maturities > 0
+  if (sum(observed) < 3) {
+    stop("Fewer than 3 observed maturities on ", format(date_to_compare),
+         "; nothing to compare.")
+  }
+  if (any(!observed)) {
+    warning(sprintf("Dropping %d maturit%s with no observation on %s.",
+                    sum(!observed), if (sum(!observed) == 1) "y" else "ies",
+                    format(date_to_compare)))
+  }
+  yields <- yields[observed]
+  maturities <- maturities[observed]
 
   # Create a data frame for storing model fits
   model_fits <- data.frame(
@@ -1343,20 +1343,25 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
   # Fit Nelson-Siegel model if requested
   if ("NS" %in% models) {
     ns_result <- fit_ns_model(maturities, yields)
-    model_fits$NS <- ns_result$fitted_yields
+
+    # fit_ns_model() drops points it could not use, so place the fitted values
+    # back onto the full maturity grid by index.
+    ns_fitted <- rep(NA_real_, length(maturities))
+    ns_fitted[ns_result$valid_idx] <- ns_result$fitted_yields
+    model_fits$NS <- ns_fitted
 
     # Calculate fit metrics
     rmse <- ns_result$rmse
-    mae <- mean(abs(yields - ns_result$fitted_yields), na.rm = TRUE)
-    max_error <- max(abs(yields - ns_result$fitted_yields), na.rm = TRUE)
+    mae <- mean(abs(yields - ns_fitted), na.rm = TRUE)
+    max_error <- max(abs(yields - ns_fitted), na.rm = TRUE)
 
     fit_metrics <- rbind(
       fit_metrics,
       data.frame(
         Model = "Nelson-Siegel",
-        RMSE = rmse * 100,  # Convert to basis points
-        MAE = mae * 100,
-        MaxError = max_error * 100
+        RMSE = rmse * err_scale,
+        MAE = mae * err_scale,
+        MaxError = max_error * err_scale
       )
     )
   }
@@ -1389,9 +1394,9 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
           fit_metrics,
           data.frame(
             Model = "Nelson-Siegel-Svensson",
-            RMSE = rmse * 100,  # Convert to basis points
-            MAE = mae * 100,
-            MaxError = max_error * 100
+            RMSE = rmse * err_scale,
+            MAE = mae * err_scale,
+            MaxError = max_error * err_scale
           )
         )
       }, error = function(e) {
@@ -1416,9 +1421,9 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
       fit_metrics,
       data.frame(
         Model = "Cubic Spline",
-        RMSE = rmse * 100,  # Convert to basis points
-        MAE = mae * 100,
-        MaxError = max_error * 100
+        RMSE = rmse * err_scale,
+        MAE = mae * err_scale,
+        MaxError = max_error * err_scale
       )
     )
   }
@@ -1441,7 +1446,7 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
     model_fits_long,
     aes(x = Maturity, y = Yield, color = Model, linetype = Model)
   ) +
-    geom_line(size = 1) +
+    geom_line(linewidth = 1) +
     geom_point(data = subset(model_fits_long, Model == "Actual")) +
     labs(
       title = paste("Term Structure Model Comparison -", format(date_to_compare, "%Y-%m-%d")),
@@ -1460,7 +1465,9 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
     for (i in 1:nrow(fit_metrics)) {
       annotation_text <- paste0(
         annotation_text,
-        fit_metrics$Model[i], ": RMSE = ", round(fit_metrics$RMSE[i], 2), " bp\n"
+        fit_metrics$Model[i], ": RMSE = ",
+        signif(fit_metrics$RMSE[i], 3),
+        if (identical(units, "bp")) " bp\n" else "\n"
       )
     }
 

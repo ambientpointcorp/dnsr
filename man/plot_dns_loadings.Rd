@@ -24,10 +24,9 @@ A ggplot object with the factor loadings plot.
 Creates a plot showing the factor loadings of the DNS model.
 }
 \examples{
-\dontrun{
-maturities <- seq(0, 30, length.out = 100)
-p <- plot_dns_loadings(maturities)
-print(p)
-}
+plot_dns_loadings()
+
+# A faster decay concentrates the curvature loading at shorter maturities
+plot_dns_loadings(lambda = 0.4)
 
 }

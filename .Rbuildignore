@@ -1,2 +1,10 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.DS_Store$
+^dnsr-structure\.txt$
+^dnsr-package-summary\.Rmd$
+^docs$
+^_pkgdown\.yml$
+^\.github$
+^cran-comments\.md$
+^data-raw$

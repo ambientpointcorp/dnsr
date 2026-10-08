@@ -10,14 +10,21 @@ fit_dns_model(
   parallel = FALSE,
   lambda_constraint = "constrained",
   initial_lambda = 0.0609,
-  show_progress = TRUE
+  show_progress = TRUE,
+  date_order = c("input", "ascending", "descending"),
+  drop_failed = TRUE,
+  warm_start = TRUE,
+  method = c("optim", "profile")
 )
 }
 \arguments{
-\item{yield_data}{Data frame. The yield curve data with first column 'Date' and remaining
-columns containing yield values for different maturities.}
+\item{yield_data}{Data frame. The yield curve data with a 'Date' column and
+remaining columns containing yield values for different maturities, named
+by maturity in years.}
 
-\item{n_days}{Integer. Number of most recent days to include in the fitting.}
+\item{n_days}{Integer. Number of most recent dates to include in the fitting.
+The window is selected by date, so it does not depend on the row order of
+\code{yield_data}.}
 
 \item{parallel}{Logical. If TRUE, use parallel processing to speed up computation.}
 
@@ -26,23 +33,58 @@ columns containing yield values for different maturities.}
 \item{initial_lambda}{Numeric. Initial value for lambda parameter.}
 
 \item{show_progress}{Logical. If TRUE, display a progress bar.}
+
+\item{date_order}{Character. Row order of the returned \code{parameters} and
+\code{fitted_yields}: \code{"input"} (the default) keeps the order the
+selected rows had in \code{yield_data}, so a most-recent-first frame yields
+a most-recent-first result; \code{"ascending"} and \code{"descending"} sort
+explicitly.}
+
+\item{drop_failed}{Logical. If TRUE (the default) dates whose cross-section
+could not be fitted are removed from the result. If FALSE they are kept
+with \code{NA} parameters.}
+
+\item{warm_start}{Logical. If TRUE (the default) each cross-section is
+initialised from the previous date's fitted lambda, walking forward in
+calendar time. Ignored when \code{parallel = TRUE}, where the fits are not
+ordered, and by \code{method = "profile"}, which needs no start values.}
+
+\item{method}{Character. Passed to \code{\link{fit_ns_model}}:
+\code{"optim"} (the default) or \code{"profile"}.}
 }
 \value{
 A list containing:
 \itemize{
-\item parameters: Data frame with model parameters for each date.
-\item fitted_yields: Matrix of fitted yield values.
+\item parameters: Data frame with model parameters for each date, plus
+\code{beta1_change}, \code{beta2_change} and \code{beta3_change}.
+\item fitted_yields: Matrix of fitted yield values, one column per maturity
+column of \code{yield_data}. Maturities that were missing on a given
+date are \code{NA}.
 \item maturities: Vector of maturities in years.
 \item success_rate: Percentage of successful model fits.
+\item failures: Data frame of dates that could not be fitted, with the reason.
+\item at_bound: Logical matrix, one row per retained date and one column per
+parameter, marking fits that came to rest on a bound. Those dates'
+factor decompositions are not identified.
 }
 }
 \description{
 Fits the DNS model to a time series of yield curves.
 }
-\examples{
-\dontrun{
-yield_data <- get_treasury_yield_combined("2020-01-01")
-dns_result <- fit_dns_model(yield_data, n_days = 30)
+\details{
+The factor change columns are first differences in calendar order
+(\eqn{\beta(t) - \beta(t-1)}) regardless of the row order of the output, so
+they can be fed directly to \code{\link{estimate_dns_dynamics}}.
 }
+\examples{
+data(treasury_yields)
+
+# The 60 most recent curves. The window is chosen by date, so passing the
+# panel in either row order selects the same dates.
+dns_result <- fit_dns_model(treasury_yields, n_days = 60, show_progress = FALSE)
+dns_result
+summary(dns_result)
+
+head(dns_result$parameters)
 
 }

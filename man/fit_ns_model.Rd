@@ -11,7 +11,8 @@ fit_ns_model(
   lambda_constraint = "constrained",
   lower_bounds = c(-0.1, -0.5, -0.5, 0.01),
   upper_bounds = c(0.2, 0.5, 0.5, 0.5),
-  optimizer = "L-BFGS-B"
+  optimizer = "L-BFGS-B",
+  method = c("optim", "profile")
 )
 }
 \arguments{
@@ -32,18 +33,34 @@ fit_ns_model(
 
 \item{upper_bounds}{Numeric vector of length 4. Upper bounds for parameters (beta1, beta2, beta3, lambda).}
 
-\item{optimizer}{Character. The optimization method to use. Default is "L-BFGS-B".}
+\item{optimizer}{Character. The optimization method to use. Default is
+"L-BFGS-B". Used by \code{method = "optim"} only.}
+
+\item{method}{Character. How to solve the fit. \code{"optim"} (the default)
+searches all four parameters numerically, as in earlier versions.
+\code{"profile"} exploits the fact that the curve is linear in the betas
+once lambda is fixed: the betas are solved by least squares in closed form
+and only lambda is searched, over one dimension. The profiled fit does not
+depend on beta start values and does not need beta bounds, which removes
+the boundary solutions \code{"optim"} can return; it is the recommended
+setting and is expected to become the default.}
 }
 \value{
 A list containing:
 \itemize{
 \item parameters: Named vector of fitted parameters (beta1, beta2, beta3, lambda)
-\item fitted_yields: Vector of fitted yield values
+\item fitted_yields: Vector of fitted yield values, one per retained maturity
 \item rmse: Root mean squared error of the fit
-\item maturities: The input maturities
-\item actual_yields: The input yields
+\item maturities: The retained maturities (input maturities, minus any dropped
+for being missing or non-positive)
+\item actual_yields: The retained input yields
 \item residuals: The fitting residuals (actual - fitted)
 \item success: Logical indicating if the optimization converged
+\item valid_idx: Logical vector over the \emph{input} maturities marking which
+points were retained, so callers can place the fitted values back into a
+full-width row
+\item at_bound: Named logical vector marking parameters that came to rest on
+one of their bounds
 }
 }
 \description{
@@ -56,12 +73,35 @@ The Nelson-Siegel model expresses the yield curve as:
 \deqn{y(m) = \beta_1 + \beta_2 \left(\frac{1-e^{-\lambda m}}{\lambda m}\right) + \beta_3 \left(\frac{1-e^{-\lambda m}}{\lambda m} - e^{-\lambda m}\right)}
 where \eqn{m} is maturity, \eqn{\beta_1}, \eqn{\beta_2}, and \eqn{\beta_3} represent the level, slope, and curvature
 factors, respectively, and \eqn{\lambda} controls the decay rate of factor loadings.
+
+With \code{method = "profile"} the sum of squared errors is concentrated:
+for any lambda the optimal betas are the least-squares solution of
+\eqn{y = X(\lambda)\beta}, so the objective reduces to a function of lambda
+alone, minimised over \code{[lower_bounds[4], upper_bounds[4]]} by
+\code{\link[stats]{optimize}}. Beta bounds are not consulted, since the
+linear solve is exact.
+
+The default bounds are written for yields in decimal form. When they are
+left at their defaults and the data is evidently on another scale (yields in
+percentage points, say), the beta box is widened to cover the data rather
+than clamping the level factor: L-BFGS-B reports convergence at a bound, so
+a clamped fit would otherwise be returned with \code{success = TRUE}. Any
+parameter that does come to rest on a bound is reported in \code{at_bound}
+and raises a warning.
 }
 \examples{
-\dontrun{
 maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
 yields <- c(0.0050, 0.0052, 0.0055, 0.0065, 0.0078, 0.0105, 0.0128, 0.0152, 0.0215, 0.0225)
-result <- fit_ns_model(maturities, yields)
-}
+fit_ns_model(maturities, yields)
+
+# The profiled fit solves the betas in closed form at each lambda, so it
+# needs no start values and cannot return a clamped beta.
+fit_ns_model(maturities, yields, method = "profile")
+
+# A real curve from the bundled panel
+data(treasury_yields)
+latest <- treasury_yields[nrow(treasury_yields), ]
+fit_ns_model(as.numeric(setdiff(names(treasury_yields), "Date")),
+             as.numeric(latest[-1]), method = "profile")
 
 }

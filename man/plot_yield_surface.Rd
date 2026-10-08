@@ -28,8 +28,9 @@ Creates a 3D visualization of the yield curve surface.
 }
 \examples{
 \dontrun{
-yield_data <- get_treasury_yield_combined("2020-01-01")
-plot_yield_surface(yield_data)
+# Needs plotly (interactive) or lattice (static)
+data(treasury_yields)
+plot_yield_surface(treasury_yields)
 }
 
 }
