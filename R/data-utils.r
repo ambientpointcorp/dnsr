@@ -1,10 +1,7 @@
 #' @title Treasury Yield Curve Data Utilities
 #' @description Functions for downloading and processing U.S. Treasury yield curve data from FRED API.
 
-#' @importFrom httr GET content
-#' @importFrom dplyr %>% mutate across where lag filter select all_of bind_rows arrange
-#' @importFrom lubridate mdy date
-#' @importFrom tidyr pivot_wider replace_na
+#' @importFrom httr GET RETRY content
 #' @importFrom stats na.omit
 
 #' @title Download Treasury Yield Data from FRED
@@ -17,12 +14,23 @@
 #' @param start_date Date or character in "YYYY-MM-DD" format. The earliest date to include.
 #' @param end_date Date or character in "YYYY-MM-DD" format. The latest date to include.
 #' @param verbose Logical. If TRUE, print processing information.
+#' @param retries Integer. Number of attempts for the HTTP request. Transient
+#'   failures and 5xx responses are retried with exponential backoff; a 4xx
+#'   response (a bad key or series id) is not, since retrying cannot help.
+#' @param cache_dir Character. Directory in which to cache responses. If given,
+#'   a request already on disk is read from there instead of being re-fetched.
+#'   \code{NULL} (the default) disables caching.
 #'
 #' @return A data.frame with date and yield value columns.
 #'
 #' @details
 #' Requires a FRED API key which can be obtained free at https://fred.stlouisfed.org/docs/api/api_key.html
 #' Set the environment variable fred_api_key or pass it directly to the function.
+#'
+#' Cache files are keyed on the series id and the requested date range only.
+#' The API key is never part of the key and is never written to disk. A cache
+#' hit is served before the key is looked up, so a cached corpus can be
+#' replayed with no key configured at all.
 #'
 #' @examples
 #' \dontrun{
@@ -34,10 +42,39 @@
 #'
 #' @export
 fetch_fred_series <- function(series_id, api_key = NULL, start_date = NULL,
-                              end_date = NULL, verbose = FALSE) {
+                              end_date = NULL, verbose = FALSE,
+                              retries = 3L, cache_dir = NULL) {
   # Parameter validation
   checkmate::assert_string(series_id, min.chars = 1)
   checkmate::assert_logical(verbose, len = 1)
+  checkmate::assert_count(retries, positive = TRUE)
+  if (!is.null(cache_dir)) checkmate::assert_string(cache_dir, min.chars = 1)
+
+  # Create informative logging function
+  log_info <- function(...) {
+    if (verbose) cat(..., "\n")
+  }
+
+  # Serve from cache before anything else. The key covers the series and the
+  # date range; the API key is deliberately excluded from it and is never
+  # written to disk. A cache hit sends no request, so it needs no key -- which
+  # is what lets a cached corpus be replayed offline.
+  cache_file <- NULL
+  if (!is.null(cache_dir)) {
+    key <- paste(
+      series_id,
+      if (is.null(start_date)) "min" else as.character(as.Date(start_date)),
+      if (is.null(end_date)) "max" else as.character(as.Date(end_date)),
+      sep = "_"
+    )
+    key <- gsub("[^A-Za-z0-9._-]", "-", key)
+    cache_file <- file.path(cache_dir, paste0("fred_", key, ".rds"))
+
+    if (file.exists(cache_file)) {
+      log_info(sprintf("Reading %s from cache", series_id))
+      return(readRDS(cache_file))
+    }
+  }
 
   # Get API key
   if (is.null(api_key)) {
@@ -45,11 +82,6 @@ fetch_fred_series <- function(series_id, api_key = NULL, start_date = NULL,
     if (api_key == "") {
       stop("FRED API key not found. Set fred_api_key environment variable or pass api_key parameter.")
     }
-  }
-
-  # Create informative logging function
-  log_info <- function(...) {
-    if (verbose) cat(..., "\n")
   }
 
   # Build API URL
@@ -71,9 +103,16 @@ fetch_fred_series <- function(series_id, api_key = NULL, start_date = NULL,
 
   log_info(sprintf("Fetching FRED series: %s", series_id))
 
-  # Make API request
+  # Make API request. RETRY backs off on transient failures; a 4xx is returned
+  # as-is for the status check below, since retrying a rejected key or an
+  # unknown series id cannot succeed.
   response <- tryCatch({
-    httr::GET(base_url, query = params)
+    httr::RETRY(
+      "GET", base_url, query = params,
+      times = as.integer(retries),
+      terminate_on = c(400L, 401L, 403L, 404L, 422L),
+      quiet = !verbose
+    )
   }, error = function(e) {
     stop(sprintf("Failed to connect to FRED API: %s", e$message))
   })
@@ -109,6 +148,12 @@ fetch_fred_series <- function(series_id, api_key = NULL, start_date = NULL,
 
   log_info(sprintf("Retrieved %d observations for %s", nrow(result), series_id))
 
+  if (!is.null(cache_file)) {
+    dir.create(dirname(cache_file), showWarnings = FALSE, recursive = TRUE)
+    saveRDS(result, cache_file)
+    log_info(sprintf("Cached %s", series_id))
+  }
+
   return(result)
 }
 
@@ -120,13 +165,24 @@ fetch_fred_series <- function(series_id, api_key = NULL, start_date = NULL,
 #' and processes it into a consistent format suitable for DNS model calibration.
 #'
 #' @param api_key Character. FRED API key. If NULL, will look for fred_api_key environment variable.
-#' @param maturities Character vector. Maturities to download. Options include:
-#'   "1MO", "3MO", "6MO", "1", "2", "3", "5", "7", "10", "20", "30"
+#' @param maturities Character vector. Maturities to download. Options are
+#'   "1MO", "2MO", "3MO", "6MO", "1", "2", "3", "5", "7", "10", "20", "30".
 #' @param start_date Date or character in "YYYY-MM-DD" format. The earliest date to include.
 #' @param end_date Date or character in "YYYY-MM-DD" format. The latest date to include.
 #' @param convert_to_decimal Logical. If TRUE, convert yields from percentages to decimal format.
 #' @param verbose Logical. If TRUE, print processing information.
-#' @param fill_missing Logical. If TRUE, attempt to fill in missing values using forward fill.
+#' @param fill_missing Logical, or one of \code{"forward"} / \code{"none"}. If TRUE
+#'   (the default) gaps are filled by carrying the last observation forward in
+#'   calendar time.
+#' @param max_gap Numeric. Maximum number of calendar days a value may be
+#'   carried across when \code{fill_missing} is in effect. Gaps wider than this
+#'   are left as \code{NA}. Defaults to \code{Inf}, which fills every gap.
+#' @param date_order Character. Row order of the returned frame:
+#'   \code{"descending"} (the default, most recent first) or \code{"ascending"}.
+#' @param retries Integer. HTTP attempts per series, passed to
+#'   \code{\link{fetch_fred_series}}.
+#' @param cache_dir Character. Directory in which to cache responses, passed to
+#'   \code{\link{fetch_fred_series}}. \code{NULL} disables caching.
 #'
 #' @return A data.frame with processed yield curve data where:
 #'   - The first column is 'Date' containing the observation dates.
@@ -149,6 +205,13 @@ fetch_fred_series <- function(series_id, api_key = NULL, start_date = NULL,
 #'
 #' Requires a FRED API key which can be obtained free at https://fred.stlouisfed.org/docs/api/api_key.html
 #'
+#' Gap filling runs on an ascending date index, so a missing yield takes the
+#' value of the most recent *earlier* observation. This matters because the
+#' frame is returned newest-first: filling in row order would carry values
+#' backwards in time and introduce look-ahead bias into anything calibrated on
+#' the result. Long series have genuine multi-year holes (DGS20 before 1993,
+#' DGS30 between 2002 and 2006); set \code{max_gap} to stop those being bridged.
+#'
 #' @examples
 #' \dontrun{
 #' # Set your API key first
@@ -165,12 +228,26 @@ get_treasury_yield_data <- function(api_key = NULL,
                                     end_date = NULL,
                                     convert_to_decimal = TRUE,
                                     verbose = FALSE,
-                                    fill_missing = TRUE) {
+                                    fill_missing = TRUE,
+                                    max_gap = Inf,
+                                    date_order = c("descending", "ascending"),
+                                    retries = 3L,
+                                    cache_dir = NULL) {
   # Parameter validation
+  date_order <- match.arg(date_order)
   checkmate::assert_logical(convert_to_decimal, len = 1)
   checkmate::assert_logical(verbose, len = 1)
-  checkmate::assert_logical(fill_missing, len = 1)
   checkmate::assert_character(maturities, min.len = 1)
+  checkmate::assert_numeric(max_gap, lower = 0, len = 1)
+
+  # fill_missing accepts the historical logical as well as a named method.
+  if (is.character(fill_missing)) {
+    fill_missing <- match.arg(fill_missing, c("forward", "none"))
+    do_fill <- identical(fill_missing, "forward")
+  } else {
+    checkmate::assert_logical(fill_missing, len = 1, any.missing = FALSE)
+    do_fill <- isTRUE(fill_missing)
+  }
 
   # Resolve the API key once up front: a missing key is a configuration
   # error, not a per-series fetch failure, and must not be swallowed by the
@@ -244,7 +321,9 @@ get_treasury_yield_data <- function(api_key = NULL,
         api_key = api_key,
         start_date = start_date,
         end_date = end_date,
-        verbose = verbose
+        verbose = verbose,
+        retries = retries,
+        cache_dir = cache_dir
       )
 
       if (nrow(df) > 0) {
@@ -281,31 +360,36 @@ get_treasury_yield_data <- function(api_key = NULL,
     }
   }
 
-  # Sort data by date (most recent first)
-  yield_data <- yield_data[order(yield_data$Date, decreasing = TRUE), ]
-
-  # Fill missing values if requested
-  if (fill_missing) {
-    log_info("Filling missing values using forward fill...")
-    yield_data <- yield_data %>%
-      arrange(desc(Date)) %>%
-      mutate(across(where(is.numeric), ~{
-        # Forward fill (carry last observation forward)
-        for(i in seq_along(.)) {
-          if(is.na(.)[i] && i > 1) {
-            .[i] <- .[i-1]
-          }
-        }
-        .
-      }))
+  # Fill gaps on an ASCENDING date index. The carry has to run forward in
+  # calendar time, which is the opposite direction from the newest-first row
+  # order this function returns by default; filling in row order would take
+  # each missing yield from a later date.
+  if (do_fill) {
+    log_info("Filling missing values (last observation carried forward)...")
+    yield_data <- yield_data[order(yield_data$Date), , drop = FALSE]
+    for (col in setdiff(names(yield_data), "Date")) {
+      if (is.numeric(yield_data[[col]])) {
+        yield_data[[col]] <- locf_by_date(
+          yield_data[[col]], yield_data$Date, max_gap = max_gap
+        )
+      }
+    }
   }
+
+  # Order the output as requested; the default reproduces the historical
+  # most-recent-first convention.
+  yield_data <- yield_data[
+    order(yield_data$Date, decreasing = identical(date_order, "descending")), ,
+    drop = FALSE
+  ]
+  rownames(yield_data) <- NULL
 
   # Final log output
   if (verbose) {
-    log_info("Final yield data structure:")
-    str(yield_data)
+    log_info(sprintf("Final yield data: %d columns (%s)",
+                     ncol(yield_data), paste(names(yield_data), collapse = ", ")))
     log_info("First few rows of final data:")
-    print(head(yield_data, 3))
+    print(utils::head(yield_data, 3))
     log_info(sprintf("Data range: %s to %s",
                      min(yield_data$Date, na.rm = TRUE),
                      max(yield_data$Date, na.rm = TRUE)))
@@ -328,8 +412,10 @@ get_treasury_yield_data <- function(api_key = NULL,
 #' @param end_date Date or character in "YYYY-MM-DD" format. The latest date to include.
 #'   If NULL, defaults to current date.
 #' @param verbose Logical. If TRUE, print processing information.
+#' @param ... Further arguments passed to \code{\link{get_treasury_yield_data}},
+#'   for example \code{max_gap}, \code{date_order} or \code{fill_missing}.
 #'
-#' @return A data.frame with combined yield curve data.
+#' @return A data.frame with combined yield curve data, most recent date first.
 #'
 #' @details
 #' This function is equivalent to calling get_treasury_yield_data() with default maturities.
@@ -347,7 +433,8 @@ get_treasury_yield_data <- function(api_key = NULL,
 get_treasury_yield_combined <- function(api_key = NULL,
                                        start_date = NULL,
                                        end_date = NULL,
-                                       verbose = FALSE) {
+                                       verbose = FALSE,
+                                       ...) {
   # Set defaults
   if (is.null(start_date)) {
     start_date <- "1990-01-01"
@@ -370,8 +457,34 @@ get_treasury_yield_combined <- function(api_key = NULL,
     end_date = end_date,
     convert_to_decimal = TRUE,
     verbose = verbose,
-    fill_missing = TRUE
+    ...
   )
 
   return(yield_data)
+}
+
+
+# Carry the last observation forward along an ascending date index.
+#
+# `x` and `dates` must be ordered by date, ascending. `max_gap` caps how many
+# days a value may be carried across, so a multi-year hole in a series (DGS20
+# before 1993, DGS30 between 2002 and 2006) is not silently bridged.
+locf_by_date <- function(x, dates, max_gap = Inf) {
+  n <- length(x)
+  if (n == 0L) return(x)
+
+  observed <- which(!is.na(x))
+  if (length(observed) == 0L) return(x)
+
+  # For each position, the index of the most recent observed value at or
+  # before it. Positions before the first observation get NA and stay NA:
+  # there is nothing earlier to carry.
+  rank_of_last <- cumsum(!is.na(x))
+  rank_of_last[rank_of_last == 0L] <- NA_integer_
+  source_idx <- observed[rank_of_last]
+
+  gap_days <- as.numeric(dates - dates[source_idx])
+  fillable <- is.na(x) & !is.na(source_idx) & gap_days <= max_gap
+  x[fillable] <- x[source_idx[fillable]]
+  x
 }

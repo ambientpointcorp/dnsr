@@ -8,7 +8,8 @@ get_treasury_yield_combined(
   api_key = NULL,
   start_date = NULL,
   end_date = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  ...
 )
 }
 \arguments{
@@ -21,9 +22,12 @@ If NULL, defaults to "1990-01-01".}
 If NULL, defaults to current date.}
 
 \item{verbose}{Logical. If TRUE, print processing information.}
+
+\item{...}{Further arguments passed to \code{\link{get_treasury_yield_data}},
+for example \code{max_gap}, \code{date_order} or \code{fill_missing}.}
 }
 \value{
-A data.frame with combined yield curve data.
+A data.frame with combined yield curve data, most recent date first.
 }
 \description{
 Downloads U.S. Treasury yield curve data from FRED API for a specified date range.
