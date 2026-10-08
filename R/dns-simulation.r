@@ -6,6 +6,7 @@
 #' @importFrom methods is
 #' @importFrom utils head tail
 
+
 #' @title Simulate DNS Factors using YUIMA package
 #'
 #' @description
@@ -19,11 +20,22 @@
 #' @param n_paths Integer. Number of simulation paths.
 #' @param include_correlation Logical. Whether to include correlations in simulations.
 #' @param seed Integer. Random seed for reproducibility.
+#' @param sim_method Character. Discretisation scheme passed to YUIMA, either
+#'   \code{"euler"} (the default) or \code{"milstein"}. Ignored by
+#'   \code{engine = "exact"}, which does not discretise.
+#' @param engine Character. \code{"yuima"} (the default) simulates through the
+#'   YUIMA package, one call per path. \code{"exact"} samples the exact
+#'   Gaussian transition law of the factor system directly: it needs no extra
+#'   package, carries no discretisation error at any step size, and is roughly
+#'   two orders of magnitude faster. The default is expected to change to
+#'   \code{"exact"} in a future release.
 #'
 #' @return A list containing:
-#'   - factors: Array of simulated factors [time, path, factor]
+#'   - factors: Array of simulated factors (time, path, factor)
 #'   - time: Vector of time points
 #'   - params: The input parameters
+#'   - sim_method: The scheme used
+#'   - engine: The engine used
 #'
 #' @details
 #' The simulation is based on the multivariate Ornstein-Uhlenbeck process:
@@ -34,8 +46,20 @@
 #' This implementation uses the YUIMA package, which provides efficient and accurate methods
 #' for simulating stochastic differential equations.
 #'
+#' The diffusion coefficient of this model does not depend on the state, so the
+#' Milstein correction term vanishes and \code{sim_method = "milstein"} coincides
+#' with the Euler-Maruyama scheme. The argument is honoured for completeness;
+#' accuracy is governed by \code{n_steps}.
+#'
+#' That accuracy ceiling is what \code{engine = "exact"} removes. The factor
+#' system is a linear SDE with state-independent diffusion, so its transition
+#' density over any step is Gaussian with a mean and covariance available in
+#' closed form. Sampling that law directly is exact in distribution at every
+#' step size, and replaces one YUIMA call per path with vectorised draws over
+#' all paths at once. The two engines agree in distribution; they do not
+#' produce the same paths from the same seed.
+#'
 #' @examples
-#' \dontrun{
 #' params <- list(
 #'   kappa = c(0.02, 0.3, 0.5),
 #'   theta = c(0.04, -0.02, 0.01),
@@ -43,16 +67,30 @@
 #'   correlation = diag(3)
 #' )
 #' initial_factors <- c(0.035, -0.015, 0.005)
-#' sim_result <- simulate_dns_factors(params, initial_factors)
+#'
+#' # The exact engine needs no extra package
+#' sim_result <- simulate_dns_factors(params, initial_factors, n_paths = 50,
+#'                                    engine = "exact", seed = 1)
+#' sim_result
+#'
+#' \dontrun{
+#' # The YUIMA engine, for comparison
+#' simulate_dns_factors(params, initial_factors, n_paths = 50, engine = "yuima")
 #' }
 #'
 #' @export
 simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
                                  n_steps = 120, n_paths = 100,
-                                 include_correlation = TRUE, seed = NULL) {
-  # Check if YUIMA package is installed
-  if (!requireNamespace("yuima", quietly = TRUE)) {
-    stop("The YUIMA package is required for SDE simulation. Please install it with: install.packages('yuima')")
+                                 include_correlation = TRUE, seed = NULL,
+                                 sim_method = "euler",
+                                 engine = c("yuima", "exact")) {
+  engine <- match.arg(engine)
+
+  # YUIMA is only needed by the engine that uses it
+  if (engine == "yuima" && !requireNamespace("yuima", quietly = TRUE)) {
+    stop("The YUIMA package is required for engine = \"yuima\". Install it ",
+         "with install.packages('yuima'), or pass engine = \"exact\", which ",
+         "needs no extra package and samples the exact transition law.")
   }
 
   # Parameter validation
@@ -65,6 +103,7 @@ simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
   checkmate::assert_scalar(time_horizon)
   checkmate::assert_count(n_steps, positive = TRUE)
   checkmate::assert_count(n_paths, positive = TRUE)
+  checkmate::assert_choice(sim_method, c("euler", "milstein"))
 
   # Set random seed if provided
   if (!is.null(seed)) set.seed(seed)
@@ -89,10 +128,28 @@ simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
     diag(3)  # Identity matrix (no correlation)
   }
 
+  # The exact engine needs nothing beyond the parameters resolved above.
+  if (engine == "exact") {
+    factors <- simulate_ou_exact(
+      kappa = kappa, theta = theta, sigma = sigma, corr_matrix = corr_matrix,
+      x0 = initial_factors, dt = delta_t, n_steps = n_steps, n_paths = n_paths
+    )
+
+    result <- list(
+      factors = factors,
+      time = time_grid,
+      params = params,
+      sim_method = sim_method,
+      engine = engine
+    )
+    class(result) <- c("dns_simulation", "list")
+    return(result)
+  }
+
   # Convert parameters to YUIMA format
   # 1. Drift coefficient (mean reversion)
-  # For O-U process: dX_t = κ(θ - X_t)dt + σdW_t
-  # The drift term is: κθ - κX_t
+  # For O-U process: dX_t = kappa*(theta - X_t)dt + sigma*dW_t
+  # The drift term is: kappa*theta - kappa*X_t
   drift_terms <- c(
     paste0(kappa[1], "*", theta[1], "-", kappa[1], "*beta1"),
     paste0(kappa[2], "*", theta[2], "-", kappa[2], "*beta2"),
@@ -154,23 +211,10 @@ simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
       object = ou_model,
       sampling = sim_params,
       xinit = initial_state,
-      method = "euler"
+      method = sim_method
     )
 
-    # Let's examine the structure of the simulation output
     sim_data <- sim@data@original.data
-
-    # The sim_data object likely has a different structure than expected
-    # It might be a matrix with the first column being time and the other columns being the simulated state variables
-
-    # Debug: print out information about sim_data for the first path only
-    if (p == 1) {
-      message("Simulation data structure: ", class(sim_data))
-      message("Simulation data dimensions: ", nrow(sim_data), " x ", ncol(sim_data))
-      if (ncol(sim_data) > 0) {
-        message("Column names: ", paste(colnames(sim_data), collapse=", "))
-      }
-    }
 
     # Get the data for each factor
     # Assuming the column structure is [time, beta1, beta2, beta3]
@@ -197,11 +241,16 @@ simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
   }
 
   # Return results
-  return(list(
+  result <- list(
     factors = factors,
     time = time_grid,
-    params = params
-  ))
+    params = params,
+    sim_method = sim_method,
+    engine = engine
+  )
+  class(result) <- c("dns_simulation", "list")
+
+  return(result)
 }
 
 #' @title Calculate Yield Curves from DNS Factors
@@ -209,26 +258,25 @@ simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
 #' @description
 #' Calculates yield curves based on DNS factors for specified maturities.
 #'
-#' @param factors Array or matrix. If array: simulated factors [time, path, factor].
-#'   If matrix: factors for a single path [time, factor].
+#' @param factors Array or matrix. If an array, simulated factors indexed by
+#'   (time, path, factor); if a matrix, factors for a single path indexed by
+#'   (time, factor).
 #' @param maturities Numeric vector. Maturities (in years) for the yield curve.
 #' @param lambda Numeric. DNS decay parameter lambda.
 #'
-#' @return Matrix of yields with dimensions [time, maturity, path] if factors is an array,
-#'   or [time, maturity] if factors is a matrix.
+#' @return Array of yields indexed by (time, maturity, path) if \code{factors} is
+#'   an array, or a matrix indexed by (time, maturity) if it is a matrix.
 #'
 #' @examples
-#' \dontrun{
-#' params <- list(
-#'   kappa = c(0.02, 0.3, 0.5),
-#'   theta = c(0.04, -0.02, 0.01),
-#'   sigma = c(0.005, 0.01, 0.02)
-#' )
-#' initial_factors <- c(0.035, -0.015, 0.005)
-#' sim_result <- simulate_dns_factors(params, initial_factors)
 #' maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
-#' yield_curves <- calculate_dns_yields(sim_result$factors, maturities, 0.0609)
-#' }
+#'
+#' # A single curve: one row of (level, slope, curvature)
+#' factors <- matrix(c(0.035, -0.015, 0.005), nrow = 1)
+#' round(calculate_dns_yields(factors, maturities, 0.0609)[1, ], 5)
+#'
+#' # Three paths over four dates, as returned by simulate_dns_factors()
+#' paths <- array(rep(c(0.035, -0.015, 0.005), each = 12), dim = c(4, 3, 3))
+#' dim(calculate_dns_yields(paths, maturities, 0.0609))
 #'
 #' @export
 calculate_dns_yields <- function(factors, maturities, lambda = 0.0609) {
@@ -268,55 +316,35 @@ calculate_dns_yields <- function(factors, maturities, lambda = 0.0609) {
   }
 
   # Precompute factor loadings for efficiency
-  loadings <- matrix(0, nrow = n_maturities, ncol = 2)
-  colnames(loadings) <- c("loading_2", "loading_3")
+  loadings <- ns_loadings(maturities, lambda)
 
-  for (m_idx in 1:n_maturities) {
-    m <- maturities[m_idx]
-
-    # Handle small maturity values to avoid numerical issues
-    if (m * lambda < 1e-10) {
-      loading_2 <- 1.0
-      loading_3 <- 0.0
-    } else {
-      loading_2 <- (1 - exp(-lambda * m)) / (lambda * m)
-      loading_3 <- loading_2 - exp(-lambda * m)
-    }
-
-    loadings[m_idx, "loading_2"] <- loading_2
-    loadings[m_idx, "loading_3"] <- loading_3
-  }
-
-  # Calculate yields for all times, paths, and maturities
+  # Calculate yields for all times, paths, and maturities. The loop runs over
+  # maturities only; the time and path dimensions are handled by vectorised
+  # arithmetic. The expression and its left-to-right operation order are
+  # unchanged from the scalar form, so results are identical to the last bit.
   if (is_array) {
-    # Multiple paths case - vectorized calculation
-    for (t in 1:n_times) {
-      for (p in 1:n_paths) {
-        beta1 <- factors[t, p, 1]
-        beta2 <- factors[t, p, 2]
-        beta3 <- factors[t, p, 3]
+    # matrix() keeps each factor two-dimensional when n_times or n_paths is 1
+    beta1 <- matrix(factors[, , 1], nrow = n_times, ncol = n_paths)
+    beta2 <- matrix(factors[, , 2], nrow = n_times, ncol = n_paths)
+    beta3 <- matrix(factors[, , 3], nrow = n_times, ncol = n_paths)
 
-        for (m_idx in 1:n_maturities) {
-          loading_2 <- loadings[m_idx, "loading_2"]
-          loading_3 <- loadings[m_idx, "loading_3"]
+    for (m_idx in seq_len(n_maturities)) {
+      loading_2 <- loadings[m_idx, 1]
+      loading_3 <- loadings[m_idx, 2]
 
-          yields[t, m_idx, p] <- beta1 + beta2 * loading_2 + beta3 * loading_3
-        }
-      }
+      yields[, m_idx, ] <- beta1 + beta2 * loading_2 + beta3 * loading_3
     }
   } else {
     # Single path case
-    for (t in 1:n_times) {
-      beta1 <- factors[t, 1]
-      beta2 <- factors[t, 2]
-      beta3 <- factors[t, 3]
+    beta1 <- factors[, 1]
+    beta2 <- factors[, 2]
+    beta3 <- factors[, 3]
 
-      for (m_idx in 1:n_maturities) {
-        loading_2 <- loadings[m_idx, "loading_2"]
-        loading_3 <- loadings[m_idx, "loading_3"]
+    for (m_idx in seq_len(n_maturities)) {
+      loading_2 <- loadings[m_idx, 1]
+      loading_3 <- loadings[m_idx, 2]
 
-        yields[t, m_idx] <- beta1 + beta2 * loading_2 + beta3 * loading_3
-      }
+      yields[, m_idx] <- beta1 + beta2 * loading_2 + beta3 * loading_3
     }
   }
 
@@ -338,16 +366,18 @@ calculate_dns_yields <- function(factors, maturities, lambda = 0.0609) {
 #' @param include_correlation Logical. Whether to include correlations in simulations.
 #' @param sim_method Character. Simulation method for YUIMA ("euler" or "milstein").
 #' @param seed Integer. Random seed for reproducibility.
+#' @param engine Character. \code{"yuima"} (the default) or \code{"exact"};
+#'   see \code{\link{simulate_dns_factors}}.
 #'
 #' @return A list containing:
-#'   - yields: Array of simulated yields [time, maturity, path]
-#'   - factors: Array of simulated factors [time, path, factor]
+#'   - yields: Array of simulated yields, indexed by (time, maturity, path)
+#'   - factors: Array of simulated factors, indexed by (time, path, factor)
 #'   - time: Vector of time points
 #'   - maturities: Vector of maturities
 #'   - params: The input parameters
+#'   - sim_method, engine: The scheme and engine used
 #'
 #' @examples
-#' \dontrun{
 #' params <- list(
 #'   kappa = c(0.02, 0.3, 0.5),
 #'   theta = c(0.04, -0.02, 0.01),
@@ -355,16 +385,21 @@ calculate_dns_yields <- function(factors, maturities, lambda = 0.0609) {
 #' )
 #' initial_factors <- c(0.035, -0.015, 0.005)
 #' maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
-#' sim_result <- simulate_dns_yield_curves(params, initial_factors, maturities)
-#' }
+#'
+#' sim_result <- simulate_dns_yield_curves(params, initial_factors, maturities,
+#'                                         n_paths = 50, engine = "exact",
+#'                                         seed = 1)
+#' sim_result
 #'
 #' @export
 simulate_dns_yield_curves <- function(params, initial_factors, maturities,
                                       lambda = 0.0609, time_horizon = 10,
                                       n_steps = 120, n_paths = 100,
                                       include_correlation = TRUE,
-                                      sim_method = "euler", seed = NULL) {
+                                      sim_method = "euler", seed = NULL,
+                                      engine = c("yuima", "exact")) {
   # Parameter validation
+  engine <- match.arg(engine)
   checkmate::assert_list(params)
   checkmate::assert_subset(c("kappa", "theta", "sigma"), names(params))
   checkmate::assert_numeric(initial_factors, len = 3)
@@ -372,12 +407,7 @@ simulate_dns_yield_curves <- function(params, initial_factors, maturities,
   checkmate::assert_numeric(lambda, lower = 0, len = 1)
   checkmate::assert_choice(sim_method, c("euler", "milstein"))
 
-  # Check if YUIMA package is installed
-  if (!requireNamespace("yuima", quietly = TRUE)) {
-    stop("The YUIMA package is required for SDE simulation. Please install it with: install.packages('yuima')")
-  }
-
-  # Simulate factors
+  # Simulate factors (simulate_dns_factors() checks for YUIMA if it needs it)
   factor_sim <- simulate_dns_factors(
     params = params,
     initial_factors = initial_factors,
@@ -385,7 +415,9 @@ simulate_dns_yield_curves <- function(params, initial_factors, maturities,
     n_steps = n_steps,
     n_paths = n_paths,
     include_correlation = include_correlation,
-    seed = seed
+    seed = seed,
+    sim_method = sim_method,
+    engine = engine
   )
 
   # Calculate yield curves
@@ -396,14 +428,19 @@ simulate_dns_yield_curves <- function(params, initial_factors, maturities,
   )
 
   # Return results
-  return(list(
+  result <- list(
     yields = yields,
     factors = factor_sim$factors,
     time = factor_sim$time,
     maturities = maturities,
     params = params,
-    lambda = lambda
-  ))
+    lambda = lambda,
+    sim_method = sim_method,
+    engine = engine
+  )
+  class(result) <- c("dns_simulation", "list")
+
+  return(result)
 }
 
 #' @title Calculate Forward Rates from DNS Factors
@@ -423,17 +460,14 @@ simulate_dns_yield_curves <- function(params, initial_factors, maturities,
 #' \deqn{f(m) = \beta_1 + \beta_2 e^{-\lambda m} + \beta_3 \lambda m e^{-\lambda m}}
 #'
 #' @examples
-#' \dontrun{
-#' params <- list(
-#'   kappa = c(0.02, 0.3, 0.5),
-#'   theta = c(0.04, -0.02, 0.01),
-#'   sigma = c(0.005, 0.01, 0.02)
-#' )
-#' initial_factors <- c(0.035, -0.015, 0.005)
-#' sim_result <- simulate_dns_factors(params, initial_factors)
 #' maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
-#' forward_rates <- calculate_dns_forwards(sim_result$factors, maturities, 0.0609)
-#' }
+#' factors <- matrix(c(0.035, -0.015, 0.005), nrow = 1)
+#'
+#' # Forwards sit above spots where the curve is rising
+#' rbind(
+#'   spot = calculate_dns_yields(factors, maturities, 0.0609)[1, ],
+#'   forward = calculate_dns_forwards(factors, maturities, 0.0609)[1, ]
+#' )
 #'
 #' @export
 calculate_dns_forwards <- function(factors, maturities, lambda = 0.0609) {
@@ -472,36 +506,32 @@ calculate_dns_forwards <- function(factors, maturities, lambda = 0.0609) {
     forwards <- matrix(0, nrow = n_times, ncol = n_maturities)
   }
 
-  # Calculate forward rates for all times, paths, and maturities
+  # Calculate forward rates for all times, paths, and maturities. As in
+  # calculate_dns_yields(), only the maturity dimension is looped; the
+  # arithmetic expression is unchanged, including its grouping, so results are
+  # identical to the last bit.
+  #
+  # Forward rate formula: f(m) = b1 + b2 exp(-lambda m) + b3 lambda m exp(-lambda m)
   if (is_array) {
-    # Multiple paths case
-    for (t in 1:n_times) {
-      for (p in 1:n_paths) {
-        for (m_idx in 1:n_maturities) {
-          m <- maturities[m_idx]
-          beta1 <- factors[t, p, 1]
-          beta2 <- factors[t, p, 2]
-          beta3 <- factors[t, p, 3]
+    beta1 <- matrix(factors[, , 1], nrow = n_times, ncol = n_paths)
+    beta2 <- matrix(factors[, , 2], nrow = n_times, ncol = n_paths)
+    beta3 <- matrix(factors[, , 3], nrow = n_times, ncol = n_paths)
 
-          # Forward rate formula: f(m) = β₁ + β₂ exp(-λm) + β₃ λm exp(-λm)
-          exp_term <- exp(-lambda * m)
-          forwards[t, m_idx, p] <- beta1 + beta2 * exp_term + beta3 * lambda * m * exp_term
-        }
-      }
+    for (m_idx in seq_len(n_maturities)) {
+      m <- maturities[m_idx]
+      exp_term <- exp(-lambda * m)
+      forwards[, m_idx, ] <- beta1 + beta2 * exp_term + beta3 * lambda * m * exp_term
     }
   } else {
     # Single path case
-    for (t in 1:n_times) {
-      for (m_idx in 1:n_maturities) {
-        m <- maturities[m_idx]
-        beta1 <- factors[t, 1]
-        beta2 <- factors[t, 2]
-        beta3 <- factors[t, 3]
+    beta1 <- factors[, 1]
+    beta2 <- factors[, 2]
+    beta3 <- factors[, 3]
 
-        # Forward rate formula: f(m) = β₁ + β₂ exp(-λm) + β₃ λm exp(-λm)
-        exp_term <- exp(-lambda * m)
-        forwards[t, m_idx] <- beta1 + beta2 * exp_term + beta3 * lambda * m * exp_term
-      }
+    for (m_idx in seq_len(n_maturities)) {
+      m <- maturities[m_idx]
+      exp_term <- exp(-lambda * m)
+      forwards[, m_idx] <- beta1 + beta2 * exp_term + beta3 * lambda * m * exp_term
     }
   }
 
@@ -563,7 +593,8 @@ dns_to_yuima_model <- function(params, correlation = NULL) {
   } else {
     checkmate::assert_matrix(correlation, nrows = 3, ncols = 3)
     # Ensure it's a correlation matrix
-    if (!all(diag(correlation) == 1) || any(abs(correlation) > 1)) {
+    if (!isTRUE(all.equal(diag(correlation), rep(1, 3))) ||
+        any(abs(correlation) > 1 + 1e-8)) {
       warning("Provided matrix doesn't appear to be a valid correlation matrix. Using identity matrix instead.")
       correlation <- diag(3)
     }
@@ -618,7 +649,11 @@ dns_to_yuima_model <- function(params, correlation = NULL) {
 #' @description
 #' Estimates DNS model parameters from factor time series using YUIMA's advanced estimation methods.
 #'
-#' @param factor_data Data frame or matrix. Time series of DNS factors (level, slope, curvature).
+#' @param factor_data Data frame or matrix. Time series of DNS factors (level,
+#'   slope, curvature). Columns named \code{beta1}, \code{beta2} and
+#'   \code{beta3} are used when present, so a \code{parameters} frame from
+#'   \code{\link{fit_dns_model}} can be passed directly; otherwise the first
+#'   three numeric columns are taken, after any \code{Date} column is dropped.
 #' @param initial_params List. Initial parameter values for optimization.
 #' @param estimation_method Character. Method for parameter estimation ("qmle" or "gmm").
 #' @param delta_t Numeric. Time step between observations in years.
@@ -655,20 +690,32 @@ estimate_dns_parameters_yuima <- function(factor_data, initial_params = NULL,
   }
 
   # Parameter validation
-  if (is.data.frame(factor_data)) {
-    if (ncol(factor_data) < 3) {
-      stop("factor_data must have at least 3 columns for the DNS factors")
-    }
-    # Extract numeric data if it's a data frame
-    factors <- as.matrix(factor_data[, 1:3])
-  } else if (is.matrix(factor_data)) {
-    if (ncol(factor_data) < 3) {
-      stop("factor_data must have at least 3 columns for the DNS factors")
-    }
-    factors <- factor_data[, 1:3]
-  } else {
+  checkmate::assert_choice(estimation_method, c("qmle", "gmm"))
+  checkmate::assert_numeric(delta_t, lower = 0, len = 1, any.missing = FALSE)
+
+  if (!is.data.frame(factor_data) && !is.matrix(factor_data)) {
     stop("factor_data must be a data frame or matrix")
   }
+
+  # Select the three factor columns by name when they are present: a
+  # `parameters` frame from fit_dns_model() leads with Date, and taking columns
+  # 1:3 positionally would feed dates into the regression.
+  beta_names <- c("beta1", "beta2", "beta3")
+  cols <- colnames(factor_data)
+
+  if (!is.null(cols) && all(beta_names %in% cols)) {
+    factors <- as.matrix(as.data.frame(factor_data)[, beta_names, drop = FALSE])
+  } else {
+    candidate <- as.data.frame(factor_data, stringsAsFactors = FALSE)
+    candidate <- candidate[, !names(candidate) %in% "Date", drop = FALSE]
+    numeric_cols <- names(candidate)[vapply(candidate, is.numeric, logical(1))]
+    if (length(numeric_cols) < 3) {
+      stop("factor_data must have at least 3 numeric columns for the DNS ",
+           "factors, or columns named beta1, beta2 and beta3")
+    }
+    factors <- as.matrix(candidate[, numeric_cols[1:3], drop = FALSE])
+  }
+  colnames(factors) <- beta_names
 
   # Check for missing values
   if (any(is.na(factors))) {
@@ -689,7 +736,7 @@ estimate_dns_parameters_yuima <- function(factor_data, initial_params = NULL,
       factor_changes <- diff(factors[, i])
       factor_levels <- factors[1:(n_obs-1), i]
 
-      # Regression: Δβ(t) ~ κθΔt - κβ(t-1)Δt
+      # Regression: d_beta(t) ~ kappa*theta*dt - kappa*beta(t-1)*dt
       lm_result <- lm(factor_changes ~ factor_levels)
 
       kappa_est[i] <- -coef(lm_result)[2] / delta_t
@@ -778,11 +825,9 @@ estimate_dns_parameters_yuima <- function(factor_data, initial_params = NULL,
       upper = upper_bounds,
       method = "L-BFGS-B"
     )
-  } else if (estimation_method == "gmm") {
+  } else {
     # Generalized Method of Moments
     fit_result <- yuima::gmm(yuima_obj)
-  } else {
-    stop("Invalid estimation_method. Use 'qmle' or 'gmm'.")
   }
 
   # Extract estimated parameters and convert back to DNS format.
@@ -812,4 +857,57 @@ estimate_dns_parameters_yuima <- function(factor_data, initial_params = NULL,
   )
 
   return(result)
+}
+
+
+# Exact simulation of the DNS factor system.
+#
+# Each factor follows dX_i = kappa_i (theta_i - X_i) dt + sigma_i dW_i, with
+# corr(dW_i, dW_j) = rho_ij. The system is linear and its diffusion does not
+# depend on the state, so the transition law over a step of length dt is
+# Gaussian and known in closed form:
+#
+#   E[X_i(t+dt) | X(t)] = theta_i + (X_i(t) - theta_i) exp(-kappa_i dt)
+#   Cov_ij              = rho_ij sigma_i sigma_j *
+#                         (1 - exp(-(kappa_i + kappa_j) dt)) / (kappa_i + kappa_j)
+#
+# The covariance couples the two reversion speeds. Using each factor's own
+# step variance together with a Cholesky factor of the correlation matrix is
+# only correct when every kappa is equal, which is why the full matrix is
+# built here. Sampling this law carries no discretisation error at any step
+# size, unlike an Euler scheme.
+simulate_ou_exact <- function(kappa, theta, sigma, corr_matrix, x0,
+                              dt, n_steps, n_paths) {
+  decay <- exp(-kappa * dt)
+
+  kappa_sum <- outer(kappa, kappa, "+")
+  # (1 - exp(-s dt)) / s, taking its limit dt as s -> 0
+  step_scale <- ifelse(
+    abs(kappa_sum) > 1e-10,
+    (1 - exp(-kappa_sum * dt)) / kappa_sum,
+    dt
+  )
+  cov_step <- corr_matrix * outer(sigma, sigma) * step_scale
+
+  chol_step <- tryCatch(chol(cov_step), error = function(e) NULL)
+  if (is.null(chol_step)) {
+    warning("Step covariance matrix is not positive definite. ",
+            "Simulating the factors without correlation.")
+    chol_step <- diag(sqrt(pmax(diag(cov_step), 0)), 3)
+  }
+
+  out <- array(0, dim = c(n_steps + 1, n_paths, 3))
+  theta_rep <- rep(theta, each = n_paths)
+  decay_rep <- rep(decay, each = n_paths)
+
+  state <- matrix(x0, nrow = n_paths, ncol = 3, byrow = TRUE)
+  out[1, , ] <- state
+
+  for (step in seq_len(n_steps)) {
+    shock <- matrix(rnorm(n_paths * 3), nrow = n_paths, ncol = 3) %*% chol_step
+    state <- theta_rep + (state - theta_rep) * decay_rep + shock
+    out[step + 1, , ] <- state
+  }
+
+  out
 }

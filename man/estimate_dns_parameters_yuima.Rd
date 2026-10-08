@@ -12,7 +12,11 @@ estimate_dns_parameters_yuima(
 )
 }
 \arguments{
-\item{factor_data}{Data frame or matrix. Time series of DNS factors (level, slope, curvature).}
+\item{factor_data}{Data frame or matrix. Time series of DNS factors (level,
+slope, curvature). Columns named \code{beta1}, \code{beta2} and
+\code{beta3} are used when present, so a \code{parameters} frame from
+\code{\link{fit_dns_model}} can be passed directly; otherwise the first
+three numeric columns are taken, after any \code{Date} column is dropped.}
 
 \item{initial_params}{List. Initial parameter values for optimization.}
 

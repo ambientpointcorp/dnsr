@@ -11,7 +11,9 @@ simulate_dns_factors(
   n_steps = 120,
   n_paths = 100,
   include_correlation = TRUE,
-  seed = NULL
+  seed = NULL,
+  sim_method = "euler",
+  engine = c("yuima", "exact")
 )
 }
 \arguments{
@@ -28,13 +30,26 @@ simulate_dns_factors(
 \item{include_correlation}{Logical. Whether to include correlations in simulations.}
 
 \item{seed}{Integer. Random seed for reproducibility.}
+
+\item{sim_method}{Character. Discretisation scheme passed to YUIMA, either
+\code{"euler"} (the default) or \code{"milstein"}. Ignored by
+\code{engine = "exact"}, which does not discretise.}
+
+\item{engine}{Character. \code{"yuima"} (the default) simulates through the
+YUIMA package, one call per path. \code{"exact"} samples the exact
+Gaussian transition law of the factor system directly: it needs no extra
+package, carries no discretisation error at any step size, and is roughly
+two orders of magnitude faster. The default is expected to change to
+\code{"exact"} in a future release.}
 }
 \value{
 A list containing:
 \itemize{
-\item factors: Array of simulated factors \link{time, path, factor}
+\item factors: Array of simulated factors (time, path, factor)
 \item time: Vector of time points
 \item params: The input parameters
+\item sim_method: The scheme used
+\item engine: The engine used
 }
 }
 \description{
@@ -51,9 +66,21 @@ where \eqn{\kappa} is the mean-reversion matrix, \eqn{\theta} is the long-run me
 
 This implementation uses the YUIMA package, which provides efficient and accurate methods
 for simulating stochastic differential equations.
+
+The diffusion coefficient of this model does not depend on the state, so the
+Milstein correction term vanishes and \code{sim_method = "milstein"} coincides
+with the Euler-Maruyama scheme. The argument is honoured for completeness;
+accuracy is governed by \code{n_steps}.
+
+That accuracy ceiling is what \code{engine = "exact"} removes. The factor
+system is a linear SDE with state-independent diffusion, so its transition
+density over any step is Gaussian with a mean and covariance available in
+closed form. Sampling that law directly is exact in distribution at every
+step size, and replaces one YUIMA call per path with vectorised draws over
+all paths at once. The two engines agree in distribution; they do not
+produce the same paths from the same seed.
 }
 \examples{
-\dontrun{
 params <- list(
   kappa = c(0.02, 0.3, 0.5),
   theta = c(0.04, -0.02, 0.01),
@@ -61,7 +88,15 @@ params <- list(
   correlation = diag(3)
 )
 initial_factors <- c(0.035, -0.015, 0.005)
-sim_result <- simulate_dns_factors(params, initial_factors)
+
+# The exact engine needs no extra package
+sim_result <- simulate_dns_factors(params, initial_factors, n_paths = 50,
+                                   engine = "exact", seed = 1)
+sim_result
+
+\dontrun{
+# The YUIMA engine, for comparison
+simulate_dns_factors(params, initial_factors, n_paths = 50, engine = "yuima")
 }
 
 }
