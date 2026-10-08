@@ -21,302 +21,359 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-The `dnsr` package provides a comprehensive implementation of the Dynamic Nelson-Siegel (DNS) model for yield curve modeling and analysis. This vignette introduces the model and demonstrates how to use the package for yield curve fitting, factor dynamics estimation, and scenario simulation.
+The `dnsr` package implements the Dynamic Nelson-Siegel (DNS) model for yield
+curve modelling. This vignette walks the whole workflow: fitting the curve,
+estimating how its factors move, simulating forward, and pricing off the
+result.
 
-**Note**: This vignette covers the basic functionality of the package. For advanced stochastic simulation using the YUIMA package, please see the `vignette("yuima-integration", package = "dnsr")`.
+Everything here runs against `treasury_yields`, a six-year panel of real
+U.S. Treasury curves that ships with the package, so none of it needs a FRED
+API key. For live data see `vignette("fred-api-setup", package = "dnsr")`, and
+for the YUIMA simulation engine see
+`vignette("dnsr-yuima-integration", package = "dnsr")`.
 
 ```{r setup}
 library(dnsr)
+data(treasury_yields)
+
+dim(treasury_yields)
+range(treasury_yields$Date)
+```
+
+The frame is the shape every function in the package expects: a `Date` column
+followed by one column per maturity, named by maturity in years, with yields in
+decimal form.
+
+```{r data_shape}
+treasury_yields[1:3, 1:6]
 ```
 
 ## The Nelson-Siegel Model
 
-The Nelson-Siegel model is a parsimonious parametric model for the yield curve. It expresses the yield curve as a function of maturity using three factors:
+The Nelson-Siegel model is a parsimonious parametric model for the yield curve.
+It expresses the yield at each maturity through three factors:
 
 $$y(m) = \beta_1 + \beta_2 \left(\frac{1-e^{-\lambda m}}{\lambda m}\right) + \beta_3 \left(\frac{1-e^{-\lambda m}}{\lambda m} - e^{-\lambda m}\right)$$
 
-where:
+where
 
-- $y(m)$ is the yield at maturity $m$
-- $\beta_1$ represents the long-term level of interest rates
-- $\beta_2$ represents the slope of the yield curve (short-term minus long-term rates)
-- $\beta_3$ represents the curvature or "hump" of the yield curve
-- $\lambda$ controls the decay rate of the factor loadings
+- $y(m)$ is the yield at maturity $m$,
+- $\beta_1$ is the long-term level of interest rates,
+- $\beta_2$ is the slope, short-term minus long-term,
+- $\beta_3$ is the curvature, the size of the hump,
+- $\lambda$ controls how fast the factor loadings decay.
 
-The model is popular because:
+The loadings are what give each factor its interpretation: the level loads
+equally on every maturity, the slope loads most at the short end and decays to
+zero, and the curvature peaks in the middle of the curve.
 
-1. It is flexible enough to capture various yield curve shapes
-2. It has a clear economic interpretation
-3. It is parsimonious, requiring only 4 parameters
+```{r loadings}
+plot_dns_loadings(lambda = 0.0609)
+```
+
+Raising $\lambda$ pulls the curvature hump toward shorter maturities:
+
+```{r loadings_fast}
+plot_dns_loadings(lambda = 0.4)
+```
 
 ## Dynamic Extension
 
-The DNS model extends the static Nelson-Siegel model by allowing the factors ($\beta_1$, $\beta_2$, $\beta_3$) to vary over time. These factors are modeled as stochastic processes, typically using Ornstein-Uhlenbeck processes:
+The DNS model lets the three factors vary over time, each as an
+Ornstein-Uhlenbeck process:
 
 $$d\beta_i(t) = \kappa_i(\theta_i - \beta_i(t))dt + \sigma_i dW_i(t)$$
 
-where:
+with $\kappa_i$ the speed of mean reversion, $\theta_i$ the long-run mean,
+$\sigma_i$ the volatility and $W_i(t)$ a Wiener process. Fitting the curve is
+therefore two steps: a cross-sectional fit on each date, then a time-series
+estimate of how the resulting factors move.
 
-- $\kappa_i$ is the speed of mean reversion
-- $\theta_i$ is the long-run mean
-- $\sigma_i$ is the volatility
-- $W_i(t)$ is a Wiener process
+## Fitting a Single Curve
 
-This dynamic extension allows for modeling the time evolution of yield curves and scenario generation.
+`fit_ns_model()` fits one cross-section. The `"profile"` method solves the
+three betas in closed form at each $\lambda$ and searches only over $\lambda$,
+so it needs no starting values:
 
-## Getting Treasury Yield Data
+```{r fit_one}
+maturities <- as.numeric(setdiff(names(treasury_yields), "Date"))
+latest <- as.numeric(treasury_yields[nrow(treasury_yields), -1])
 
-The first step is to download Treasury yield curve data. The `dnsr` package provides functions to download and process this data:
-
-```{r get_data, eval=FALSE}
-# Set FRED API key first (do once per session)
-Sys.setenv(fred_api_key = "your_api_key_here")
-
-# Download recent Treasury yield curve data (last ~2 years)
-yield_data <- get_treasury_yield_combined(start_date = "2022-01-01")
-
-# Look at the data structure
-head(yield_data)
+curve <- fit_ns_model(maturities, latest, method = "profile")
+curve
 ```
 
-```{r eval=FALSE}
-# For this vignette, we'll create a small synthetic dataset
-dates <- seq(as.Date("2023-01-01"), as.Date("2023-12-31"), by = "week")
-maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
+That warning is worth taking seriously rather than silencing. The fit reports
+any parameter that came to rest on one of its bounds, because a clamped fit can
+still look respectable on RMSE while the factor decomposition means nothing,
+and `L-BFGS-B` reports convergence at a bound, so `success` alone cannot tell
+you.
 
-# Create synthetic yield data frame
-set.seed(123)
-yield_data <- data.frame(Date = dates)
-
-# Base yield curve shape
-base_curve <- c(0.035, 0.037, 0.039, 0.040, 0.042, 0.043, 0.044, 0.045, 0.046, 0.045)
-
-for (i in seq_along(maturities)) {
-  # Add time series variation to each maturity
-  m <- maturities[i]
-  col_name <- as.character(m)
-  
-  # Create synthetic yields with level, slope, and curvature variations
-  level_trend <- 0.005 * sin(2 * pi * (1:length(dates)) / length(dates))
-  slope_effect <- 0.001 * (max(maturities) - m) * cos(4 * pi * (1:length(dates)) / length(dates))
-  curvature_effect <- 0.001 * exp(-(m - 5)^2) * sin(6 * pi * (1:length(dates)) / length(dates))
-  
-  yield_data[[col_name]] <- base_curve[i] + level_trend + slope_effect + curvature_effect + 
-    rnorm(length(dates), 0, 0.0005)
-}
+```{r fit_one_bounds}
+curve$at_bound
 ```
 
-## Fitting the DNS Model
+Here the default ceiling on $\lambda$, 0.5, is genuinely binding: this curve
+wants a faster decay than the conventional value allows. Given room, it finds
+an interior optimum and fits better:
 
-Now that we have yield curve data, we can fit the DNS model:
-
-```{r fit_dns, eval=FALSE}
-# Fit the DNS model to historical yield curves
-dns_result <- fit_dns_model(yield_data, show_progress = TRUE)
-
-# Look at the fitted parameters
-head(dns_result$parameters)
+```{r fit_one_wide}
+wider <- fit_ns_model(maturities, latest, method = "profile",
+                      lower_bounds = c(-1, -1, -1, 0.01),
+                      upper_bounds = c(1, 1, 1, 5))
+c(lambda = wider$parameters[["lambda"]], rmse_bp = wider$rmse * 10000)
 ```
 
-We can visualize the fitted yield curves to assess the model's performance:
+## Fitting the Panel
 
-```{r plot_fits, eval=FALSE}
-# Plot actual vs. fitted yield curves for a few dates
-p <- plot_yield_curves(yield_data, dns_result)
-p
+`fit_dns_model()` fits every date. The window is selected by date, so it does
+not matter which row order the panel arrives in.
+
+For a panel there is a choice to make that does not arise for a single curve.
+If $\lambda$ is estimated freely it varies from date to date -- on this data
+from 0.04 to 0.50 -- and then $\beta_2$ on one date does not mean the same
+thing as $\beta_2$ on the next, because the loading it multiplies has changed
+shape. The betas stop being a comparable time series, which is precisely what
+the next step needs them to be.
+
+Standard DNS practice, following Diebold and Li, therefore fixes $\lambda$ at a
+single value for the whole panel. It costs cross-sectional fit -- about 14
+basis points median here against 7 with $\lambda$ free -- and buys factors that
+can be modelled over time:
+
+```{r fit_panel}
+recent <- fit_dns_model(treasury_yields, n_days = 250, show_progress = FALSE,
+                        lambda_constraint = "fixed", initial_lambda = 0.0609)
+recent
 ```
 
-We can also examine the time series of the fitted factors:
+`summary()` gives the distribution of each factor and of the fit error:
 
-```{r plot_factors, eval=FALSE}
-# Plot the factor time series
-factor_plots <- plot_factor_time_series(dns_result)
+```{r fit_summary}
+summary(recent)
+```
+
+Fitted curves against the observations:
+
+```{r plot_fits}
+plot_yield_curves(treasury_yields, recent, max_plots = 4)
+```
+
+And the factors over time:
+
+```{r plot_factors}
+factor_plots <- plot_factor_time_series(recent)
 factor_plots$factors
+```
+
+```{r plot_rmse}
+factor_plots$rmse
 ```
 
 ## Estimating Factor Dynamics
 
-To capture the dynamics of the yield curve, we need to estimate the stochastic processes governing the factors:
+`estimate_dns_dynamics()` regresses each factor's change on its lagged level.
+By default it samples the factor series at month-ends and estimates at
+$\Delta t = 1/12$: daily cross-sectional refits carry measurement noise that is
+serially uncorrelated, and an OU regression on daily changes reads that noise
+as mean reversion, inflating $\kappa$ by an order of magnitude.
 
-```{r dynamics, eval=FALSE}
-# Estimate factor dynamics
-dynamics <- estimate_dns_dynamics(dns_result$parameters)
+Because the estimation uses month-ends anyway, fitting only those is enough and
+is far quicker. `warm_start = FALSE` makes each cross-section independent of
+which other dates are in the panel, so these fits are the ones fitting every
+day would have produced:
 
-# Look at the estimated parameters
-cat("Level factor (β₁):\n")
-cat("  Mean reversion speed (κ):", round(dynamics$beta1$kappa, 4), "\n")
-cat("  Long-run mean (θ):", round(dynamics$beta1$theta, 4), "\n")
-cat("  Volatility (σ):", round(dynamics$beta1$sigma, 4), "\n")
-cat("  Half-life:", round(dynamics$beta1$half_life_days, 1), "days\n\n")
+```{r dynamics}
+month_ends <- treasury_yields[
+  !duplicated(format(treasury_yields$Date, "%Y-%m"), fromLast = TRUE),
+]
+monthly_fit <- fit_dns_model(month_ends, n_days = nrow(month_ends),
+                             show_progress = FALSE, warm_start = FALSE,
+                             lambda_constraint = "fixed",
+                             initial_lambda = 0.0609)
 
-cat("Slope factor (β₂):\n")
-cat("  Mean reversion speed (κ):", round(dynamics$beta2$kappa, 4), "\n")
-cat("  Long-run mean (θ):", round(dynamics$beta2$theta, 4), "\n")
-cat("  Volatility (σ):", round(dynamics$beta2$sigma, 4), "\n")
-cat("  Half-life:", round(dynamics$beta2$half_life_days, 1), "days\n\n")
-
-cat("Curvature factor (β₃):\n")
-cat("  Mean reversion speed (κ):", round(dynamics$beta3$kappa, 4), "\n")
-cat("  Long-run mean (θ):", round(dynamics$beta3$theta, 4), "\n")
-cat("  Volatility (σ):", round(dynamics$beta3$sigma, 4), "\n")
-cat("  Half-life:", round(dynamics$beta3$half_life_days, 1), "days\n\n")
-
-# Look at factor correlations
-print(round(dynamics$correlation, 3))
+dynamics <- estimate_dns_dynamics(monthly_fit$parameters)
+dynamics
 ```
 
-The estimated dynamics give us insights into how the yield curve evolves over time. For example:
+The standard errors are worth reading before anything is built on $\kappa$.
+Mean reversion is weakly identified in a sample this short, and the half-life
+interval says so:
 
-- The level factor typically has slow mean reversion (long half-life)
-- The slope factor has moderate mean reversion
-- The curvature factor often has the fastest mean reversion
+```{r dynamics_uncertainty}
+dynamics$beta1$se
+dynamics$beta1$t_value
+dynamics$beta1$half_life_ci
+```
+
+$\kappa$ also carries a well-known upward small-sample bias of order $5/T$ in a
+sample of $T$ years, which these standard errors describe nothing about: they
+are sampling noise, not bias.
+
+Factor innovations are correlated, and the simulation uses that:
+
+```{r dynamics_correlation}
+round(dynamics$correlation, 3)
+```
+
+### A full mean-reversion matrix
+
+By default the three factors revert independently. `structure = "full"`
+estimates the Diebold-Li VAR(1) instead, in which a shock to one factor pulls
+the others:
+
+```{r dynamics_full}
+full <- estimate_dns_dynamics(monthly_fit$parameters, structure = "full")
+round(full$kappa_matrix, 3)
+```
+
+The eigenvalues of that matrix decide whether the system is stable, which a
+diagonal reconstruction would get wrong whenever the cross terms matter:
+
+```{r dynamics_eigen}
+round(Re(full$eigenvalues), 3)
+full$system_stability
+```
 
 ## Simulating Future Yield Curves
 
-We can use the estimated dynamics to simulate future yield curve scenarios. The package offers two simulation methods:
+The factor system is a linear SDE whose diffusion does not depend on the state,
+so its transition law over any step is a known Gaussian. `engine = "exact"`
+samples that law directly: no discretisation error at any step size, and no
+extra package.
 
-1. **Basic Simulation**: Using standard discretization methods
-2. **Advanced Simulation**: Using the YUIMA package for accurate SDE simulation (covered in the YUIMA integration vignette)
+```{r simulate}
+latest_row <- monthly_fit$parameters[which.max(monthly_fit$parameters$Date), ]
+initial_factors <- as.numeric(latest_row[c("beta1", "beta2", "beta3")])
 
-Here we'll demonstrate the basic simulation:
+sim_params <- dns_dynamics_to_sim_params(dynamics, lambda = latest_row$lambda)
 
-```{r simulation, eval=FALSE}
-# Convert dynamics to simulation parameters
-sim_params <- dns_dynamics_to_sim_params(dynamics)
-
-# Get initial factors from most recent observation
-initial_factors <- as.numeric(dns_result$parameters[1, c("beta1", "beta2", "beta3")])
-
-# Simulate yield curves
-sim_result <- simulate_dns_yield_curves(
+simulation <- simulate_dns_yield_curves(
   params = sim_params,
   initial_factors = initial_factors,
-  maturities = as.numeric(names(yield_data)[-1]),
-  time_horizon = 5,   # 5 years
-  n_steps = 60,       # Monthly steps
-  n_paths = 100       # 100 simulation paths
+  maturities = maturities,
+  time_horizon = 5,
+  n_steps = 60,
+  n_paths = 500,
+  engine = "exact",
+  seed = 1
 )
+simulation
+```
 
-# Plot simulated yield curves at specific horizons
+Simulated curves at a few horizons. The facets follow the calendar rather than
+sorting lexically, so "Year 5" comes after "Year 3":
+
+```{r plot_simulated_yields}
 yield_plots <- plot_simulated_yields(
-  sim_result, 
-  time_points = c(0, 1, 3, 5),  # Now, 1 year, 3 years, 5 years
-  path_subset = 1:5             # Show 5 paths
+  simulation,
+  time_points = c(0, 1, 3, 5),
+  path_subset = 1:5
 )
-
 yield_plots$yield_curves
 ```
 
-We can also examine the evolution of the simulated factors:
+The factor paths, as a fan of quantiles across all 500 of them:
 
-```{r factor_sim, eval=FALSE}
-# Plot simulated factors
-factor_sim_plots <- plot_simulated_factors(sim_result)
-factor_sim_plots$level
+```{r plot_simulated_factors}
+plot_simulated_factors(simulation)$level
 ```
 
-## Advanced Stochastic Simulation
+The YUIMA engine remains available and is the default, for the estimation
+machinery that comes with it. See
+`vignette("dnsr-yuima-integration", package = "dnsr")`.
 
-For more advanced stochastic simulation using the YUIMA package, we can use the enhanced simulation functions:
+## Pricing off a Fitted Curve
 
-```{r yuima_sim, eval=FALSE}
-# Check if YUIMA is installed
-if (requireNamespace("yuima", quietly = TRUE)) {
-  # Simulate using YUIMA's Euler-Maruyama scheme
-  yuima_sim <- simulate_dns_yield_curves(
-    params = sim_params,
-    initial_factors = initial_factors,
-    maturities = as.numeric(names(yield_data)[-1]),
-    time_horizon = 5,
-    n_steps = 60,
-    n_paths = 100,
-    sim_method = "euler"  # Use YUIMA's Euler-Maruyama scheme
-  )
-  
-  # Plot the results
-  yuima_plots <- plot_simulated_yields(
-    yuima_sim, 
-    time_points = c(0, 1, 3, 5)
-  )
-  
-  # See the YUIMA integration vignette for more details on advanced simulation
-}
-```
+A fitted curve is only useful if it discounts cashflows. The DNS curve gives
+continuously compounded zero rates, so the discount factor at maturity $m$ is
+$P(m) = \exp(-y(m)\,m)$:
 
-## Visualizing DNS Model Properties
+```{r pricing}
+factors <- matrix(curve$parameters[1:3], nrow = 1)
+lambda <- curve$parameters[["lambda"]]
 
-The DNS model's flexibility comes from its factor loadings structure. We can visualize these loadings:
-
-```{r loadings, eval=FALSE}
-# Plot factor loadings
-p <- plot_dns_loadings(
-  maturities = seq(0, 30, length.out = 100),
-  lambda = dns_result$parameters$lambda[1]
+coupon_maturities <- c(0.5, 1, 2, 5, 10, 30)
+data.frame(
+  maturity = coupon_maturities,
+  zero_pct = round(calculate_dns_yields(factors, coupon_maturities, lambda)[1, ] * 100, 3),
+  discount = round(dns_discount_factors(factors, coupon_maturities, lambda)[1, ], 4),
+  price_100 = round(dns_zero_prices(factors, coupon_maturities, lambda)[1, ], 2),
+  par_pct = round(dns_par_yields(factors, coupon_maturities, lambda)[1, ] * 100, 3)
 )
-p
 ```
 
-## Advanced Visualizations
+Par yields are the coupon rate that prices a bullet bond at par. They differ
+from the zero yields for two reasons that can pull in opposite directions: a
+compounding convention term, since the curve is continuously compounded while
+the par rate pays twice a year, and a shape term, since coupons are discounted
+at the earlier rates rather than the terminal one. The first dominates at the
+short end and the second further out.
 
-The package provides several additional visualization functions:
+Forward rates come off the same factors:
 
-### Heat Map of Yield Curve Evolution
-
-```{r heatmap, eval=FALSE}
-# Create a heat map of yield curve evolution
-p <- plot_yield_heatmap(yield_data)
-p
+```{r forwards}
+rbind(
+  spot = round(calculate_dns_yields(factors, coupon_maturities, lambda)[1, ] * 100, 3),
+  forward = round(calculate_dns_forwards(factors, coupon_maturities, lambda)[1, ] * 100, 3)
+)
 ```
 
-### 3D Yield Surface
+## Looking at the Panel
 
-```{r surface, eval=FALSE}
-# Create a 3D visualization (requires plotly)
-if (requireNamespace("plotly", quietly = TRUE)) {
-  surface <- plot_yield_surface(yield_data)
-  # For non-interactive output:
-  # plotly::orca(surface, "yield_surface.png")
-}
+A heatmap of the whole panel shows the 2020 collapse to near-zero short rates
+and the 2022-2023 inversion:
+
+```{r heatmap}
+plot_yield_heatmap(treasury_yields)
 ```
 
-### PCA Analysis
+Principal components of the daily changes. Decomposing the covariance matrix
+rather than standardising each maturity first is the usual convention for yield
+curves, and is what produces the familiar level, slope and curvature shapes:
 
-```{r pca, eval=FALSE}
-# Perform principal component analysis
-pca_result <- plot_yield_pca(yield_data)
-pca_result$plots$weights
+```{r pca}
+pca <- plot_yield_pca(treasury_yields, scale = FALSE)
+round(pca$var_explained[1:3], 4)
+pca$plots$weights
 ```
 
-## Model Comparison
+The first three components are the empirical counterpart of the model's three
+factors, which is the reason a three-factor curve works as well as it does.
 
-The DNS model can be compared to other term structure models:
+## Comparing Term Structure Models
 
-```{r comparison, eval=FALSE}
-# Compare DNS with other models for a specific date
+`compare_term_structure_models()` fits several curves to one cross-section and
+reports the error of each, in basis points:
+
+```{r comparison}
 comparison <- compare_term_structure_models(
-  yield_data,
-  date_to_compare = yield_data$Date[1],
-  models = c("NS", "Spline")
+  treasury_yields,
+  models = c("NS", "NSS", "Spline")
 )
+comparison$metrics
+```
+
+```{r comparison_plot}
 comparison$plot
 ```
 
-## Conclusion
+Nelson-Siegel-Svensson adds a second curvature term with its own decay, so it
+nests Nelson-Siegel and must fit at least as well; the question is whether the
+two extra parameters are worth it. A smoothing spline will generally beat both
+on in-sample error while saying nothing about the shape, which is the trade the
+parametric models exist to make.
 
-The `dnsr` package provides a comprehensive framework for yield curve modeling using the Dynamic Nelson-Siegel approach. It offers tools for:
+## Where to Go Next
 
-1. Downloading and preprocessing Treasury yield data
-2. Fitting the DNS model to historical data
-3. Estimating factor dynamics
-4. Simulating future yield curve scenarios
-5. Visualizing results in various formats
+```{r next, eval=FALSE}
+# Live Treasury data, caching and the API key
+vignette("fred-api-setup", package = "dnsr")
 
-For advanced stochastic simulation using the YUIMA package, please refer to the dedicated vignette:
-
-```r
+# The YUIMA engine, and quasi-maximum-likelihood estimation
 vignette("dnsr-yuima-integration", package = "dnsr")
 ```
 
-These capabilities make it valuable for interest rate risk management, ALM modeling, economic scenario generation, and fixed income research.
-
-For more details on specific functions, please refer to their documentation.
+`get_calibrated_dns_params()` wraps the whole path above into one call, from
+downloading data to returning simulation-ready parameters, for when the
+intermediate objects are not needed.

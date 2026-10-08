@@ -578,3 +578,78 @@ test_that("SmithWilson is opt-in and its arguments are appended", {
   expect_false("SmithWilson" %in% eval(formals(
     compare_term_structure_models)$models))
 })
+
+
+# ---- which diagnostic belongs to which structure ---------------------------
+
+test_that("a negative own-diagonal in a stable full system is not a warning", {
+  # A full mean-reversion matrix is free to have a negative entry on its own
+  # diagonal while the system reverts overall: what decides that is the
+  # eigenvalues of the whole matrix. Reporting "no mean reversion" per factor
+  # here was wrong, and fired on the bundled panel.
+  data(treasury_yields)
+  month_ends <- treasury_yields[
+    !duplicated(format(treasury_yields$Date, "%Y-%m"), fromLast = TRUE),
+  ]
+  fit <- fit_dns_model(month_ends, n_days = nrow(month_ends),
+                       show_progress = FALSE, warm_start = FALSE,
+                       lambda_constraint = "fixed", initial_lambda = 0.0609)
+
+  seen <- character(0)
+  dynamics <- withCallingHandlers(
+    estimate_dns_dynamics(fit$parameters, structure = "full"),
+    warning = function(w) {
+      seen <<- c(seen, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+
+  expect_true(dynamics$system_stability)
+  expect_true(all(Re(dynamics$eigenvalues) > 0))
+  expect_false(any(grepl("No mean reversion detected", seen)))
+  expect_false(any(grepl("not mean reverting", seen)))
+
+  # The point of the test: at least one own-diagonal entry is negative, so the
+  # old per-factor check would have fired.
+  expect_true(any(diag(dynamics$kappa_matrix) < 0))
+})
+
+test_that("a genuinely explosive system is reported by each structure", {
+  # phi > 1, so the change loads positively on the lagged level and kappa
+  # really is negative.
+  set.seed(3)
+  n <- 240
+  phi <- 1.04
+  betas <- matrix(NA_real_, n, 3)
+  betas[1, ] <- c(0.04, -0.01, 0.01)
+  for (i in 2:n) {
+    betas[i, ] <- phi * betas[i - 1, ] + stats::rnorm(3, 0, 0.002)
+  }
+  panel <- data.frame(
+    Date = seq(as.Date("1990-01-31"), by = "month", length.out = n),
+    beta1 = betas[, 1], beta2 = betas[, 2], beta3 = betas[, 3]
+  )
+
+  collect <- function(structure) {
+    seen <- character(0)
+    dynamics <- withCallingHandlers(
+      estimate_dns_dynamics(panel, structure = structure),
+      warning = function(w) {
+        seen <<- c(seen, conditionMessage(w))
+        invokeRestart("muffleWarning")
+      }
+    )
+    list(dynamics = dynamics, warnings = seen)
+  }
+
+  # Diagonal: each factor fails to revert on its own terms, and says so.
+  diagonal <- collect("diagonal")
+  expect_true(all(grepl("No mean reversion detected", diagonal$warnings)))
+  expect_length(diagonal$warnings, 3)
+
+  # Full: the system-level verdict, from the eigenvalues.
+  full <- collect("full")
+  expect_false(full$dynamics$system_stability)
+  expect_true(any(Re(full$dynamics$eigenvalues) <= 0))
+  expect_true(any(grepl("not mean reverting", full$warnings)))
+})

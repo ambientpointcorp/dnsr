@@ -259,13 +259,23 @@ estimate_dns_dynamics <- function(params_df, min_observations = 20, dt = NULL,
         # is reported rather than swallowed: it means the factor drifted
         # without reverting over the estimation window, so theta is not
         # identified from the regression and the sample mean stands in.
-        warning(sprintf(
-          paste0("No mean reversion detected for %s (estimated kappa = %s). ",
-                 "Using |kappa| and the sample mean for theta; treat the ",
-                 "dynamics of this factor as unidentified over %s to %s."),
-          factor_name, format(signif(kappa, 3)),
-          format(date_range[1]), format(date_range[2])
-        ))
+        #
+        # Only under the diagonal structure, though. There a non-positive
+        # kappa really does mean the factor does not revert. In the full
+        # system it means only that this factor's own coefficient is negative,
+        # which a VAR is free to do while remaining stable overall: what
+        # decides that is the eigenvalues of the whole matrix, checked once it
+        # has been assembled. Both the kappa and the theta set here are
+        # replaced by the matrix solution below.
+        if (structure == "diagonal") {
+          warning(sprintf(
+            paste0("No mean reversion detected for %s (estimated kappa = %s). ",
+                   "Using |kappa| and the sample mean for theta; treat the ",
+                   "dynamics of this factor as unidentified over %s to %s."),
+            factor_name, format(signif(kappa, 3)),
+            format(date_range[1]), format(date_range[2])
+          ))
+        }
         kappa <- max(0.001, abs(kappa))
         theta <- factor_summary$mean
       } else {
@@ -410,10 +420,24 @@ estimate_dns_dynamics <- function(params_df, min_observations = 20, dt = NULL,
   dynamics$kappa_matrix <- kappa_matrix
   dynamics$theta_vector <- theta_vector
 
-  # Analyze persistence of the model
+  # Analyze persistence of the model. The mean-reverting system is stable when
+  # every eigenvalue of the mean-reversion matrix has a positive real part; for
+  # a full matrix that is not the same question as whether each diagonal entry
+  # is positive.
   eigenvalues <- kappa_matrix_eigenvalues(dynamics)
   dynamics$eigenvalues <- eigenvalues
   dynamics$system_stability <- all(Re(eigenvalues) > 0)
+
+  if (!dynamics$system_stability) {
+    warning(sprintf(
+      paste0("The estimated factor system is not mean reverting: the ",
+             "mean-reversion matrix has eigenvalues with non-positive real ",
+             "parts (%s). Simulating from it will not be stationary; treat ",
+             "the dynamics over %s to %s as unidentified."),
+      paste(format(signif(Re(eigenvalues), 3)), collapse = ", "),
+      format(date_range[1]), format(date_range[2])
+    ))
+  }
 
   class(dynamics) <- c("dns_dynamics", "list")
 
