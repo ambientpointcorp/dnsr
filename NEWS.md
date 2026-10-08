@@ -39,7 +39,10 @@ documentation correction.
   it: `docs/` was a gitignored local build, never committed, ten months stale,
   documenting three functions that no longer existed and missing six that did.
   The site is now built on a runner that has pandoc and published to
-  `gh-pages`.
+  `gh-pages`. Standing the workflow up immediately showed the index was
+  incomplete -- it omitted the `dnsr-package` topic, which pkgdown treats as an
+  error -- a gap that had gone unnoticed because nothing had ever rendered the
+  config.
 
 # dnsr 0.4.0
 

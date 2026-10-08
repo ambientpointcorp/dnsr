@@ -4,6 +4,10 @@ template:
   bootstrap: 5
 
 reference:
+  - title: Overview
+    contents:
+      - dnsr-package
+
   - title: Treasury data
     desc: Fetch and assemble yield curve panels from FRED.
     contents:
