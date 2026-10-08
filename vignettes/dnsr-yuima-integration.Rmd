@@ -10,13 +10,18 @@ vignette: >
 ---
 
 ```{r, include = FALSE}
+# Defined here, in a chunk that always runs: the chunks below switch on
+# has_yuima, so it must exist even when the eval gate below is FALSE and the
+# setup chunk never executes.
+has_yuima <- requireNamespace("yuima", quietly = TRUE)
+
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
   fig.height = 5,
   dpi = 100,
-  eval = requireNamespace("yuima", quietly = TRUE)
+  eval = has_yuima
 )
 ```
 
@@ -30,8 +35,7 @@ library(dnsr)
 # install.packages("yuima") # Uncomment if needed
 # Set up FRED API key before running examples
 
-# Check if YUIMA is available for this vignette
-has_yuima <- requireNamespace("yuima", quietly = TRUE)
+# has_yuima is set in the setup chunk above
 if (!has_yuima) {
   message("YUIMA package is not installed. Some code examples will not run.")
   message("Install YUIMA with: install.packages('yuima')")
