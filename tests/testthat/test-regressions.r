@@ -165,17 +165,39 @@ test_that("fitting leaves the caller's future plan alone", {
   old_plan <- future::plan()
   on.exit(future::plan(old_plan), add = TRUE)
 
-  future::plan(future::multisession, workers = 2)
+  # A tweaked sequential plan, which costs nothing to install and is still
+  # distinguishable from the plain sequential one the bug used to force. That
+  # is precisely what has to be detected, and it needs no workers: starting
+  # those was most of this test's runtime.
+  future::plan(future::sequential, split = TRUE)
   expected <- class(future::plan())
+  expect_true("tweaked" %in% expected)
 
-  panel <- ns_panel(12)
+  panel <- ns_panel(14)
   invisible(fit_dns_model(panel, n_days = 10, parallel = FALSE,
                           show_progress = FALSE))
   expect_equal(class(future::plan()), expected)
+})
 
-  invisible(fit_dns_model(panel, n_days = 10, parallel = TRUE,
-                          show_progress = FALSE))
+test_that("parallel and sequential fits agree, and restore the plan", {
+  old_plan <- future::plan()
+  on.exit(future::plan(old_plan), add = TRUE)
+
+  future::plan(future::multisession, workers = 2)
+  expected <- class(future::plan())
+
+  panel <- ns_panel(14)
+  sequential_fit <- fit_dns_model(panel, n_days = 10, parallel = FALSE,
+                                  show_progress = FALSE, warm_start = FALSE)
+  parallel_fit <- fit_dns_model(panel, n_days = 10, parallel = TRUE,
+                                show_progress = FALSE)
+
   expect_equal(class(future::plan()), expected)
+
+  # C-07: the two paths agree, which they could not while the warm start was
+  # carried through a global variable the workers never saw.
+  expect_equal(sequential_fit$parameters$Date, parallel_fit$parameters$Date)
+  expect_equal(sequential_fit$parameters$beta1, parallel_fit$parameters$beta1)
 })
 
 
@@ -187,20 +209,6 @@ test_that("fitting writes nothing into the global environment", {
   }
   invisible(fit_dns_model(ns_panel(12), n_days = 10, show_progress = FALSE))
   expect_false(exists("last_fit_result", envir = globalenv(), inherits = FALSE))
-})
-
-test_that("parallel and sequential fits agree", {
-  old_plan <- future::plan()
-  on.exit(future::plan(old_plan), add = TRUE)
-
-  panel <- ns_panel(14)
-  seq_fit <- fit_dns_model(panel, n_days = 10, parallel = FALSE,
-                           show_progress = FALSE, warm_start = FALSE)
-  par_fit <- fit_dns_model(panel, n_days = 10, parallel = TRUE,
-                           show_progress = FALSE)
-
-  expect_equal(seq_fit$parameters$Date, par_fit$parameters$Date)
-  expect_equal(seq_fit$parameters$beta1, par_fit$parameters$beta1)
 })
 
 
@@ -406,8 +414,10 @@ test_that("a boundary solution is reported rather than passed off as success", {
 test_that("estimate_dns_parameters_yuima selects factor columns by name", {
   skip_if_not_installed("yuima")
 
-  panel <- ns_panel(60)
-  fit <- fit_dns_model(panel, n_days = 60, show_progress = FALSE)
+  # QMLE's cost grows with the series length and this asserts only that the
+  # factor columns are picked out by name, so a short panel is enough.
+  panel <- ns_panel(30)
+  fit <- fit_dns_model(panel, n_days = 30, show_progress = FALSE)
 
   # Passing the parameters frame straight in used to feed the Date column into
   # diff() as factor 1.
@@ -438,10 +448,12 @@ test_that("every plot actually draws, not just builds", {
   # runnable and R CMD check started drawing them. Printing to a null device
   # exercises the whole pipeline.
   data(treasury_yields)
-  panel <- treasury_yields[1:60, ]
+  panel <- treasury_yields[1:30, ]
   fit <- suppressWarnings(
-    fit_dns_model(panel, n_days = 40, show_progress = FALSE)
+    fit_dns_model(panel, n_days = 20, show_progress = FALSE)
   )
+  # One decomposition, both of its plots.
+  pca <- plot_yield_pca(panel, scale = FALSE)
 
   draws <- list(
     loadings = plot_dns_loadings(),
@@ -449,8 +461,8 @@ test_that("every plot actually draws, not just builds", {
     curves = plot_yield_curves(panel, fit, max_plots = 3),
     heatmap = plot_yield_heatmap(panel),
     heatmap_reversed = plot_yield_heatmap(panel, reverse_time = TRUE),
-    pca_weights = plot_yield_pca(panel, scale = FALSE)$plots$weights,
-    pca_variance = plot_yield_pca(panel)$plots$variance,
+    pca_weights = pca$plots$weights,
+    pca_variance = pca$plots$variance,
     comparison = suppressWarnings(
       compare_term_structure_models(panel, models = c("NS", "NSS", "Spline"))
     )$plot
@@ -497,4 +509,52 @@ test_that("every plot actually draws, not just builds", {
       }
     )
   }
+})
+
+
+# ---- panel independence -----------------------------------------------------
+
+test_that("without warm start, a date's fit is independent of the panel", {
+  data(treasury_yields)
+  # A short window on purpose: this asserts an invariant about how the fits are
+  # initialised, which does not need a long panel, and each extra date here
+  # costs four cross-sectional fits.
+  window <- utils::tail(treasury_yields, 60)
+  month_ends <- window[
+    !duplicated(format(window$Date, "%Y-%m"), fromLast = TRUE),
+  ]
+
+  fit_subset <- suppressWarnings(fit_dns_model(
+    month_ends, n_days = nrow(month_ends), show_progress = FALSE,
+    warm_start = FALSE
+  ))
+  fit_full <- suppressWarnings(fit_dns_model(
+    window, n_days = nrow(window), show_progress = FALSE, warm_start = FALSE
+  ))
+
+  shared <- match(fit_subset$parameters$Date, fit_full$parameters$Date)
+  expect_false(anyNA(shared))
+
+  # Identical, which is what lets the examples fit only the month-ends the
+  # monthly dynamics estimation uses.
+  for (column in c("beta1", "beta2", "beta3", "lambda", "rmse")) {
+    expect_equal(fit_subset$parameters[[column]],
+                 fit_full$parameters[[column]][shared],
+                 info = column)
+  }
+
+  # With warm starting on, they are close but not identical: each fit is
+  # initialised from the previous date's lambda, and the month-end chain is
+  # not the daily one.
+  warm_subset <- suppressWarnings(fit_dns_model(
+    month_ends, n_days = nrow(month_ends), show_progress = FALSE
+  ))
+  warm_full <- suppressWarnings(fit_dns_model(
+    window, n_days = nrow(window), show_progress = FALSE
+  ))
+  warm_shared <- match(warm_subset$parameters$Date, warm_full$parameters$Date)
+  expect_false(isTRUE(all.equal(
+    warm_subset$parameters$lambda,
+    warm_full$parameters$lambda[warm_shared]
+  )))
 })

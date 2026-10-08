@@ -47,7 +47,14 @@ with \code{NA} parameters.}
 \item{warm_start}{Logical. If TRUE (the default) each cross-section is
 initialised from the previous date's fitted lambda, walking forward in
 calendar time. Ignored when \code{parallel = TRUE}, where the fits are not
-ordered, and by \code{method = "profile"}, which needs no start values.}
+ordered, and by \code{method = "profile"}, which needs no start values.
+
+Note that warm starting makes a date's fit depend on which \emph{other}
+dates are in the panel: fitting a month-end series directly and fitting
+the daily series that contains it give slightly different parameters on
+the shared dates, because the chain of start values differs. Set
+\code{warm_start = FALSE} for cross-sections that are independent of the
+panel they arrived in.}
 
 \item{method}{Character. Passed to \code{\link{fit_ns_model}}:
 \code{"optim"} (the default) or \code{"profile"}.}

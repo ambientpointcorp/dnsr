@@ -1,6 +1,6 @@
 Package: dnsr
 Title: Dynamic Nelson-Siegel Term Structure Model
-Version: 0.4.0
+Version: 0.4.1
 Authors@R: 
     person("Ariel", "R. H.", email = "ariel@ambientpointcorp.com", role = c("aut", "cre"))
 Description: Implementation of the Dynamic Nelson-Siegel (DNS) model for yield curve 

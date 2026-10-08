@@ -108,9 +108,18 @@ diagonal.
 }
 \examples{
 data(treasury_yields)
-dns_result <- fit_dns_model(treasury_yields, n_days = 750, show_progress = FALSE)
 
-# Month-end sampling by default
+# The default monthly sampling estimates on month-end observations, so
+# fitting only those is enough and is an order of magnitude quicker.
+# warm_start = FALSE makes each cross-section independent of which other
+# dates are in the panel, so these fits are identical to the ones fitting
+# every day would produce on the same month-ends.
+month_ends <- treasury_yields[
+  !duplicated(format(treasury_yields$Date, "\%Y-\%m"), fromLast = TRUE),
+]
+dns_result <- fit_dns_model(month_ends, n_days = nrow(month_ends),
+                            show_progress = FALSE, warm_start = FALSE)
+
 dynamics <- estimate_dns_dynamics(dns_result$parameters)
 dynamics
 

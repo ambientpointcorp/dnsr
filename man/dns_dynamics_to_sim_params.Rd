@@ -32,7 +32,13 @@ through as \code{kappa_matrix} for inspection.
 }
 \examples{
 data(treasury_yields)
-dns_result <- fit_dns_model(treasury_yields, n_days = 750, show_progress = FALSE)
+
+# Month-ends only: the dynamics are estimated on them anyway
+month_ends <- treasury_yields[
+  !duplicated(format(treasury_yields$Date, "\%Y-\%m"), fromLast = TRUE),
+]
+dns_result <- fit_dns_model(month_ends, n_days = nrow(month_ends),
+                            show_progress = FALSE, warm_start = FALSE)
 dynamics <- estimate_dns_dynamics(dns_result$parameters)
 
 # Pass the fitted lambda through, rather than leaving the 0.0609 default
