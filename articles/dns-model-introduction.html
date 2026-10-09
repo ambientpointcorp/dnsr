@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,7 +62,7 @@
                         <h4 data-toc-skip class="author">dnsr
 package</h4>
             
-            <h4 data-toc-skip class="date">2026-10-08</h4>
+            <h4 data-toc-skip class="date">2026-10-09</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/ambientpointcorp/dnsr/blob/main/vignettes/dns-model-introduction.Rmd" class="external-link"><code>vignettes/dns-model-introduction.Rmd</code></a></small>
       <div class="d-none name"><code>dns-model-introduction.Rmd</code></div>
@@ -73,337 +73,445 @@ package</h4>
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>The <code>dnsr</code> package provides a comprehensive implementation
-of the Dynamic Nelson-Siegel (DNS) model for yield curve modeling and
-analysis. This vignette introduces the model and demonstrates how to use
-the package for yield curve fitting, factor dynamics estimation, and
-scenario simulation.</p>
-<p><strong>Note</strong>: This vignette covers the basic functionality
-of the package. For advanced stochastic simulation using the YUIMA
-package, please see the
-<code>vignette("yuima-integration", package = "dnsr")</code>.</p>
+<p>The <code>dnsr</code> package implements the Dynamic Nelson-Siegel
+(DNS) model for yield curve modelling. This vignette walks the whole
+workflow: fitting the curve, estimating how its factors move, simulating
+forward, and pricing off the result.</p>
+<p>Everything here runs against <code>treasury_yields</code>, a six-year
+panel of real U.S. Treasury curves that ships with the package, so none
+of it needs a FRED API key. For live data see
+<code><a href="../articles/fred-api-setup.html">vignette("fred-api-setup", package = "dnsr")</a></code>, and for the
+YUIMA simulation engine see
+<code><a href="../articles/dnsr-yuima-integration.html">vignette("dnsr-yuima-integration", package = "dnsr")</a></code>.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/ambientpointcorp/dnsr" class="external-link">dnsr</a></span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/ambientpointcorp/dnsr" class="external-link">dnsr</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 1501   12</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">$</span><span class="va">Date</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] "2019-01-02" "2024-12-31"</span></span></code></pre></div>
+<p>The frame is the shape every function in the package expects: a
+<code>Date</code> column followed by one column per maturity, named by
+maturity in years, with yields in decimal form.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">treasury_yields</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span></span>
+<span><span class="co">#&gt;         Date 0.0833   0.25    0.5      1      2</span></span>
+<span><span class="co">#&gt; 1 2019-01-02 0.0240 0.0242 0.0251 0.0260 0.0250</span></span>
+<span><span class="co">#&gt; 2 2019-01-03 0.0242 0.0241 0.0247 0.0250 0.0239</span></span>
+<span><span class="co">#&gt; 3 2019-01-04 0.0240 0.0242 0.0251 0.0257 0.0250</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="the-nelson-siegel-model">The Nelson-Siegel Model<a class="anchor" aria-label="anchor" href="#the-nelson-siegel-model"></a>
 </h2>
 <p>The Nelson-Siegel model is a parsimonious parametric model for the
-yield curve. It expresses the yield curve as a function of maturity
-using three factors:</p>
+yield curve. It expresses the yield at each maturity through three
+factors:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msub><mi>β</mi><mn>1</mn></msub><mo>+</mo><msub><mi>β</mi><mn>2</mn></msub><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><mrow><mn>1</mn><mo>−</mo><msup><mi>e</mi><mrow><mi>−</mi><mi>λ</mi><mi>m</mi></mrow></msup></mrow><mrow><mi>λ</mi><mi>m</mi></mrow></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mo>+</mo><msub><mi>β</mi><mn>3</mn></msub><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><mrow><mn>1</mn><mo>−</mo><msup><mi>e</mi><mrow><mi>−</mi><mi>λ</mi><mi>m</mi></mrow></msup></mrow><mrow><mi>λ</mi><mi>m</mi></mrow></mfrac><mo>−</mo><msup><mi>e</mi><mrow><mi>−</mi><mi>λ</mi><mi>m</mi></mrow></msup><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">y(m) = \beta_1 + \beta_2 \left(\frac{1-e^{-\lambda m}}{\lambda m}\right) + \beta_3 \left(\frac{1-e^{-\lambda m}}{\lambda m} - e^{-\lambda m}\right)</annotation></semantics></math></p>
-<p>where:</p>
+<p>where</p>
 <ul>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">y(m)</annotation></semantics></math>
 is the yield at maturity
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>m</mi><annotation encoding="application/x-tex">m</annotation></semantics></math>
-</li>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>m</mi><annotation encoding="application/x-tex">m</annotation></semantics></math>,</li>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>1</mn></msub><annotation encoding="application/x-tex">\beta_1</annotation></semantics></math>
-represents the long-term level of interest rates</li>
+is the long-term level of interest rates,</li>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
-represents the slope of the yield curve (short-term minus long-term
-rates)</li>
+is the slope, short-term minus long-term,</li>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>3</mn></msub><annotation encoding="application/x-tex">\beta_3</annotation></semantics></math>
-represents the curvature or “hump” of the yield curve</li>
+is the curvature, the size of the hump,</li>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-controls the decay rate of the factor loadings</li>
+controls how fast the factor loadings decay.</li>
 </ul>
-<p>The model is popular because:</p>
-<ol style="list-style-type: decimal">
-<li>It is flexible enough to capture various yield curve shapes</li>
-<li>It has a clear economic interpretation</li>
-<li>It is parsimonious, requiring only 4 parameters</li>
-</ol>
+<p>The loadings are what give each factor its interpretation: the level
+loads equally on every maturity, the slope loads most at the short end
+and decays to zero, and the curvature peaks in the middle of the
+curve.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_dns_loadings.html">plot_dns_loadings</a></span><span class="op">(</span>lambda <span class="op">=</span> <span class="fl">0.0609</span><span class="op">)</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/loadings-1.png" class="r-plt" alt="" width="700"></p>
+<p>Raising
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
+pulls the curvature hump toward shorter maturities:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_dns_loadings.html">plot_dns_loadings</a></span><span class="op">(</span>lambda <span class="op">=</span> <span class="fl">0.4</span><span class="op">)</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/loadings_fast-1.png" class="r-plt" alt="" width="700"></p>
 </div>
 <div class="section level2">
 <h2 id="dynamic-extension">Dynamic Extension<a class="anchor" aria-label="anchor" href="#dynamic-extension"></a>
 </h2>
-<p>The DNS model extends the static Nelson-Siegel model by allowing the
-factors
-(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>1</mn></msub><annotation encoding="application/x-tex">\beta_1</annotation></semantics></math>,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>3</mn></msub><annotation encoding="application/x-tex">\beta_3</annotation></semantics></math>)
-to vary over time. These factors are modeled as stochastic processes,
-typically using Ornstein-Uhlenbeck processes:</p>
+<p>The DNS model lets the three factors vary over time, each as an
+Ornstein-Uhlenbeck process:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><msub><mi>β</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msub><mi>κ</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>θ</mi><mi>i</mi></msub><mo>−</mo><msub><mi>β</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="false" form="postfix">)</mo><mi>d</mi><mi>t</mi><mo>+</mo><msub><mi>σ</mi><mi>i</mi></msub><mi>d</mi><msub><mi>W</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">d\beta_i(t) = \kappa_i(\theta_i - \beta_i(t))dt + \sigma_i dW_i(t)</annotation></semantics></math></p>
-<p>where:</p>
-<ul>
-<li>
+<p>with
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>κ</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\kappa_i</annotation></semantics></math>
-is the speed of mean reversion</li>
-<li>
+the speed of mean reversion,
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>θ</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\theta_i</annotation></semantics></math>
-is the long-run mean</li>
-<li>
+the long-run mean,
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>σ</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\sigma_i</annotation></semantics></math>
-is the volatility</li>
-<li>
+the volatility and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>W</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">W_i(t)</annotation></semantics></math>
-is a Wiener process</li>
-</ul>
-<p>This dynamic extension allows for modeling the time evolution of
-yield curves and scenario generation.</p>
+a Wiener process. Fitting the curve is therefore two steps: a
+cross-sectional fit on each date, then a time-series estimate of how the
+resulting factors move.</p>
 </div>
 <div class="section level2">
-<h2 id="getting-treasury-yield-data">Getting Treasury Yield Data<a class="anchor" aria-label="anchor" href="#getting-treasury-yield-data"></a>
+<h2 id="fitting-a-single-curve">Fitting a Single Curve<a class="anchor" aria-label="anchor" href="#fitting-a-single-curve"></a>
 </h2>
-<p>The first step is to download Treasury yield curve data. The
-<code>dnsr</code> package provides functions to download and process
-this data:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Set FRED API key first (do once per session)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Sys.setenv.html" class="external-link">Sys.setenv</a></span><span class="op">(</span>fred_api_key <span class="op">=</span> <span class="st">"your_api_key_here"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Download recent Treasury yield curve data (last ~2 years)</span></span>
-<span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span>start_date <span class="op">=</span> <span class="st">"2022-01-01"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Look at the data structure</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">yield_data</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># For this vignette, we'll create a small synthetic dataset</span></span>
-<span><span class="va">dates</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2023-01-01"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2023-12-31"</span><span class="op">)</span>, by <span class="op">=</span> <span class="st">"week"</span><span class="op">)</span></span>
-<span><span class="va">maturities</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">3</span>, <span class="fl">5</span>, <span class="fl">7</span>, <span class="fl">10</span>, <span class="fl">20</span>, <span class="fl">30</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Create synthetic yield data frame</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">123</span><span class="op">)</span></span>
-<span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Date <span class="op">=</span> <span class="va">dates</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Base yield curve shape</span></span>
-<span><span class="va">base_curve</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.035</span>, <span class="fl">0.037</span>, <span class="fl">0.039</span>, <span class="fl">0.040</span>, <span class="fl">0.042</span>, <span class="fl">0.043</span>, <span class="fl">0.044</span>, <span class="fl">0.045</span>, <span class="fl">0.046</span>, <span class="fl">0.045</span><span class="op">)</span></span>
-<span></span>
-<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">maturities</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Add time series variation to each maturity</span></span>
-<span>  <span class="va">m</span> <span class="op">&lt;-</span> <span class="va">maturities</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
-<span>  <span class="va">col_name</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">m</span><span class="op">)</span></span>
-<span>  </span>
-<span>  <span class="co"># Create synthetic yields with level, slope, and curvature variations</span></span>
-<span>  <span class="va">level_trend</span> <span class="op">&lt;-</span> <span class="fl">0.005</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">sin</a></span><span class="op">(</span><span class="fl">2</span> <span class="op">*</span> <span class="va">pi</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">dates</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">dates</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">slope_effect</span> <span class="op">&lt;-</span> <span class="fl">0.001</span> <span class="op">*</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">maturities</span><span class="op">)</span> <span class="op">-</span> <span class="va">m</span><span class="op">)</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">cos</a></span><span class="op">(</span><span class="fl">4</span> <span class="op">*</span> <span class="va">pi</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">dates</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">dates</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">curvature_effect</span> <span class="op">&lt;-</span> <span class="fl">0.001</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="op">-</span><span class="op">(</span><span class="va">m</span> <span class="op">-</span> <span class="fl">5</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">sin</a></span><span class="op">(</span><span class="fl">6</span> <span class="op">*</span> <span class="va">pi</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">dates</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">dates</span><span class="op">)</span><span class="op">)</span></span>
-<span>  </span>
-<span>  <span class="va">yield_data</span><span class="op">[[</span><span class="va">col_name</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">base_curve</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">+</span> <span class="va">level_trend</span> <span class="op">+</span> <span class="va">slope_effect</span> <span class="op">+</span> <span class="va">curvature_effect</span> <span class="op">+</span> </span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">dates</span><span class="op">)</span>, <span class="fl">0</span>, <span class="fl">0.0005</span><span class="op">)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="fitting-the-dns-model">Fitting the DNS Model<a class="anchor" aria-label="anchor" href="#fitting-the-dns-model"></a>
-</h2>
-<p>Now that we have yield curve data, we can fit the DNS model:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Fit the DNS model to historical yield curves</span></span>
-<span><span class="va">dns_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_dns_model.html">fit_dns_model</a></span><span class="op">(</span><span class="va">yield_data</span>, show_progress <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Look at the fitted parameters</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">dns_result</span><span class="op">$</span><span class="va">parameters</span><span class="op">)</span></span></code></pre></div>
-<p>We can visualize the fitted yield curves to assess the model’s
-performance:</p>
+<p><code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> fits one cross-section. The
+<code>"profile"</code> method solves the three betas in closed form at
+each
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
+and searches only over
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>,
+so it needs no starting values:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Plot actual vs. fitted yield curves for a few dates</span></span>
-<span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_yield_curves.html">plot_yield_curves</a></span><span class="op">(</span><span class="va">yield_data</span>, <span class="va">dns_result</span><span class="op">)</span></span>
-<span><span class="va">p</span></span></code></pre></div>
-<p>We can also examine the time series of the fitted factors:</p>
+<code class="sourceCode R"><span><span class="va">maturities</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sets.html" class="external-link">setdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span>, <span class="st">"Date"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">latest</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span>, <span class="op">-</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">curve</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_ns_model.html">fit_ns_model</a></span><span class="op">(</span><span class="va">maturities</span>, <span class="va">latest</span>, method <span class="op">=</span> <span class="st">"profile"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Warning in fit_ns_model(maturities, latest, method = "profile"): Nelson-Siegel</span></span>
+<span><span class="co">#&gt; fit rests on a parameter bound (lambda); the factor decomposition is not</span></span>
+<span><span class="co">#&gt; identified. Widen lower_bounds/upper_bounds or check the yield scale.</span></span>
+<span><span class="va">curve</span></span>
+<span><span class="co">#&gt; Nelson-Siegel curve fit</span></span>
+<span><span class="co">#&gt;   beta1 (level)     0.04988</span></span>
+<span><span class="co">#&gt;   beta2 (slope)     -0.00617</span></span>
+<span><span class="co">#&gt;   beta3 (curvature) -0.01404</span></span>
+<span><span class="co">#&gt;   lambda            0.50000</span></span>
+<span><span class="co">#&gt;   rmse              4.95 bp over 11 maturities</span></span>
+<span><span class="co">#&gt;   at bound          lambda (decomposition not identified)</span></span></code></pre></div>
+<p>That warning is worth taking seriously rather than silencing. The fit
+reports any parameter that came to rest on one of its bounds, because a
+clamped fit can still look respectable on RMSE while the factor
+decomposition means nothing, and <code>L-BFGS-B</code> reports
+convergence at a bound, so <code>success</code> alone cannot tell
+you.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Plot the factor time series</span></span>
-<span><span class="va">factor_plots</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_factor_time_series.html">plot_factor_time_series</a></span><span class="op">(</span><span class="va">dns_result</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">curve</span><span class="op">$</span><span class="va">at_bound</span></span>
+<span><span class="co">#&gt;  beta1  beta2  beta3 lambda </span></span>
+<span><span class="co">#&gt;  FALSE  FALSE  FALSE   TRUE</span></span></code></pre></div>
+<p>Here the default ceiling on
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>,
+0.5, is genuinely binding: this curve wants a faster decay than the
+conventional value allows. Given room, it finds an interior optimum and
+fits better:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">wider</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_ns_model.html">fit_ns_model</a></span><span class="op">(</span><span class="va">maturities</span>, <span class="va">latest</span>, method <span class="op">=</span> <span class="st">"profile"</span>,</span>
+<span>                      lower_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span>, <span class="op">-</span><span class="fl">1</span>, <span class="op">-</span><span class="fl">1</span>, <span class="fl">0.01</span><span class="op">)</span>,</span>
+<span>                      upper_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>lambda <span class="op">=</span> <span class="va">wider</span><span class="op">$</span><span class="va">parameters</span><span class="op">[[</span><span class="st">"lambda"</span><span class="op">]</span><span class="op">]</span>, rmse_bp <span class="op">=</span> <span class="va">wider</span><span class="op">$</span><span class="va">rmse</span> <span class="op">*</span> <span class="fl">10000</span><span class="op">)</span></span>
+<span><span class="co">#&gt;    lambda   rmse_bp </span></span>
+<span><span class="co">#&gt; 0.6687707 4.4314318</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="fitting-the-panel">Fitting the Panel<a class="anchor" aria-label="anchor" href="#fitting-the-panel"></a>
+</h2>
+<p><code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> fits every date. The window is selected
+by date, so it does not matter which row order the panel arrives in.</p>
+<p>For a panel there is a choice to make that does not arise for a
+single curve. If
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
+is estimated freely it varies from date to date – on this data from 0.04
+to 0.50 – and then
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
+on one date does not mean the same thing as
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
+on the next, because the loading it multiplies has changed shape. The
+betas stop being a comparable time series, which is precisely what the
+next step needs them to be.</p>
+<p>Standard DNS practice, following Diebold and Li, therefore fixes
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
+at a single value for the whole panel. It costs cross-sectional fit –
+about 14 basis points median here against 7 with
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
+free – and buys factors that can be modelled over time:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">recent</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_dns_model.html">fit_dns_model</a></span><span class="op">(</span><span class="va">treasury_yields</span>, n_days <span class="op">=</span> <span class="fl">250</span>, show_progress <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>                        lambda_constraint <span class="op">=</span> <span class="st">"fixed"</span>, initial_lambda <span class="op">=</span> <span class="fl">0.0609</span><span class="op">)</span></span>
+<span><span class="va">recent</span></span>
+<span><span class="co">#&gt; Dynamic Nelson-Siegel fit</span></span>
+<span><span class="co">#&gt;   250 curves, 2024-01-02 to 2024-12-31</span></span>
+<span><span class="co">#&gt;   maturities         0.0833  0.2500  0.5000  1.0000  2.0000  3.0000  5.0000  7.0000 10.0000 20.0000 30.0000</span></span>
+<span><span class="co">#&gt;   rmse              23.01 bp median, 42.01 bp worst</span></span>
+<span><span class="co">#&gt;   lambda            0.0609 median</span></span>
+<span><span class="co">#&gt;   success rate      100.0%</span></span></code></pre></div>
+<p><code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> gives the distribution of each factor and of
+the fit error:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">recent</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Dynamic Nelson-Siegel fit</span></span>
+<span><span class="co">#&gt;   250 curves, 2024-01-02 to 2024-12-31, 100.0% fitted</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Factors:</span></span>
+<span><span class="co">#&gt;             min     mean      max      sd</span></span>
+<span><span class="co">#&gt; beta1   0.04832  0.10658  0.14015 0.02229</span></span>
+<span><span class="co">#&gt; beta2  -0.09104 -0.05679 -0.00534 0.02056</span></span>
+<span><span class="co">#&gt; beta3  -0.18200 -0.11474  0.00968 0.04603</span></span>
+<span><span class="co">#&gt; lambda  0.06090  0.06090  0.06090 0.00000</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Fit error (basis points):</span></span>
+<span><span class="co">#&gt;    0%   50%   95%  100% </span></span>
+<span><span class="co">#&gt;  5.71 23.01 39.97 42.01</span></span></code></pre></div>
+<p>Fitted curves against the observations:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_yield_curves.html">plot_yield_curves</a></span><span class="op">(</span><span class="va">treasury_yields</span>, <span class="va">recent</span>, max_plots <span class="op">=</span> <span class="fl">4</span><span class="op">)</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/plot_fits-1.png" class="r-plt" alt="" width="700"></p>
+<p>And the factors over time:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">factor_plots</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_factor_time_series.html">plot_factor_time_series</a></span><span class="op">(</span><span class="va">recent</span><span class="op">)</span></span>
 <span><span class="va">factor_plots</span><span class="op">$</span><span class="va">factors</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/plot_factors-1.png" class="r-plt" alt="" width="700"></p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">factor_plots</span><span class="op">$</span><span class="va">rmse</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/plot_rmse-1.png" class="r-plt" alt="" width="700"></p>
 </div>
 <div class="section level2">
 <h2 id="estimating-factor-dynamics">Estimating Factor Dynamics<a class="anchor" aria-label="anchor" href="#estimating-factor-dynamics"></a>
 </h2>
-<p>To capture the dynamics of the yield curve, we need to estimate the
-stochastic processes governing the factors:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Estimate factor dynamics</span></span>
-<span><span class="va">dynamics</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics</a></span><span class="op">(</span><span class="va">dns_result</span><span class="op">$</span><span class="va">parameters</span><span class="op">)</span></span>
+<p><code><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics()</a></code> regresses each factor’s change
+on its lagged level. By default it samples the factor series at
+month-ends and estimates at
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>t</mi><mo>=</mo><mn>1</mn><mi>/</mi><mn>12</mn></mrow><annotation encoding="application/x-tex">\Delta t = 1/12</annotation></semantics></math>:
+daily cross-sectional refits carry measurement noise that is serially
+uncorrelated, and an OU regression on daily changes reads that noise as
+mean reversion, inflating
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
+by an order of magnitude.</p>
+<p>Because the estimation uses month-ends anyway, fitting only those is
+enough and is far quicker. <code>warm_start = FALSE</code> makes each
+cross-section independent of which other dates are in the panel, so
+these fits are the ones fitting every day would have produced:</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">month_ends</span> <span class="op">&lt;-</span> <span class="va">treasury_yields</span><span class="op">[</span></span>
+<span>  <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/duplicated.html" class="external-link">duplicated</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">$</span><span class="va">Date</span>, <span class="st">"%Y-%m"</span><span class="op">)</span>, fromLast <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span><span class="op">]</span></span>
+<span><span class="va">monthly_fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_dns_model.html">fit_dns_model</a></span><span class="op">(</span><span class="va">month_ends</span>, n_days <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">month_ends</span><span class="op">)</span>,</span>
+<span>                             show_progress <span class="op">=</span> <span class="cn">FALSE</span>, warm_start <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>                             lambda_constraint <span class="op">=</span> <span class="st">"fixed"</span>,</span>
+<span>                             initial_lambda <span class="op">=</span> <span class="fl">0.0609</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Look at the estimated parameters</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Level factor (β₁):\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Mean reversion speed (κ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">kappa</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Long-run mean (θ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">theta</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Volatility (σ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">sigma</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Half-life:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">half_life_days</span>, <span class="fl">1</span><span class="op">)</span>, <span class="st">"days\n\n"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Slope factor (β₂):\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Mean reversion speed (κ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta2</span><span class="op">$</span><span class="va">kappa</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Long-run mean (θ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta2</span><span class="op">$</span><span class="va">theta</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Volatility (σ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta2</span><span class="op">$</span><span class="va">sigma</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Half-life:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta2</span><span class="op">$</span><span class="va">half_life_days</span>, <span class="fl">1</span><span class="op">)</span>, <span class="st">"days\n\n"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Curvature factor (β₃):\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Mean reversion speed (κ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta3</span><span class="op">$</span><span class="va">kappa</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Long-run mean (θ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta3</span><span class="op">$</span><span class="va">theta</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Volatility (σ):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta3</span><span class="op">$</span><span class="va">sigma</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"  Half-life:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta3</span><span class="op">$</span><span class="va">half_life_days</span>, <span class="fl">1</span><span class="op">)</span>, <span class="st">"days\n\n"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Look at factor correlations</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">correlation</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>The estimated dynamics give us insights into how the yield curve
-evolves over time. For example:</p>
-<ul>
-<li>The level factor typically has slow mean reversion (long
-half-life)</li>
-<li>The slope factor has moderate mean reversion</li>
-<li>The curvature factor often has the fastest mean reversion</li>
-</ul>
+<span><span class="va">dynamics</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics</a></span><span class="op">(</span><span class="va">monthly_fit</span><span class="op">$</span><span class="va">parameters</span><span class="op">)</span></span>
+<span><span class="va">dynamics</span></span>
+<span><span class="co">#&gt; DNS factor dynamics</span></span>
+<span><span class="co">#&gt;   estimated on     2019-02-28 to 2024-12-31</span></span>
+<span><span class="co">#&gt;   sampling         monthly (dt = 1/12), 71 observations</span></span>
+<span><span class="co">#&gt;   structure        diagonal</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;                 kappa se_kappa   theta  sigma half_life_y</span></span>
+<span><span class="co">#&gt; level (b1)     0.6667   0.4748  0.0492 0.0620      1.0397</span></span>
+<span><span class="co">#&gt; slope (b2)     1.2032   0.6338 -0.0215 0.0594      0.5761</span></span>
+<span><span class="co">#&gt; curvature (b3) 0.8292   0.5299 -0.0181 0.1243      0.8360</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   stable           TRUE (eigenvalues 1.203 0.829 0.667)</span></span></code></pre></div>
+<p>The standard errors are worth reading before anything is built on
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>.
+Mean reversion is weakly identified in a sample this short, and the
+half-life interval says so:</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">se</span></span>
+<span><span class="co">#&gt;      kappa      theta      sigma </span></span>
+<span><span class="co">#&gt; 0.47482691 0.03849805 0.00527441</span></span>
+<span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">t_value</span></span>
+<span><span class="co">#&gt;    kappa    theta </span></span>
+<span><span class="co">#&gt; 1.404094 1.276968</span></span>
+<span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">half_life_ci</span></span>
+<span><span class="co">#&gt;    lower    upper </span></span>
+<span><span class="co">#&gt; 0.433937      Inf</span></span></code></pre></div>
+<p><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
+also carries a well-known upward small-sample bias of order
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>5</mn><mi>/</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">5/T</annotation></semantics></math>
+in a sample of
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>T</mi><annotation encoding="application/x-tex">T</annotation></semantics></math>
+years, which these standard errors describe nothing about: they are
+sampling noise, not bias.</p>
+<p>Factor innovations are correlated, and the simulation uses that:</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">correlation</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt;        beta1  beta2  beta3</span></span>
+<span><span class="co">#&gt; beta1  1.000 -0.980 -0.986</span></span>
+<span><span class="co">#&gt; beta2 -0.980  1.000  0.974</span></span>
+<span><span class="co">#&gt; beta3 -0.986  0.974  1.000</span></span></code></pre></div>
+<div class="section level3">
+<h3 id="a-full-mean-reversion-matrix">A full mean-reversion matrix<a class="anchor" aria-label="anchor" href="#a-full-mean-reversion-matrix"></a>
+</h3>
+<p>By default the three factors revert independently.
+<code>structure = "full"</code> estimates the Diebold-Li VAR(1) instead,
+in which a shock to one factor pulls the others:</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">full</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics</a></span><span class="op">(</span><span class="va">monthly_fit</span><span class="op">$</span><span class="va">parameters</span>, structure <span class="op">=</span> <span class="st">"full"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">full</span><span class="op">$</span><span class="va">kappa_matrix</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt;        beta1  beta2  beta3</span></span>
+<span><span class="co">#&gt; beta1 -2.615 -6.952  0.802</span></span>
+<span><span class="co">#&gt; beta2  2.334  5.767 -0.623</span></span>
+<span><span class="co">#&gt; beta3  7.148 12.107  0.141</span></span></code></pre></div>
+<p>The eigenvalues of that matrix decide whether the system is stable,
+which a diagonal reconstruction would get wrong whenever the cross terms
+matter:</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/complex.html" class="external-link">Re</a></span><span class="op">(</span><span class="va">full</span><span class="op">$</span><span class="va">eigenvalues</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 1.401 1.401 0.490</span></span>
+<span><span class="va">full</span><span class="op">$</span><span class="va">system_stability</span></span>
+<span><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+</div>
 </div>
 <div class="section level2">
 <h2 id="simulating-future-yield-curves">Simulating Future Yield Curves<a class="anchor" aria-label="anchor" href="#simulating-future-yield-curves"></a>
 </h2>
-<p>We can use the estimated dynamics to simulate future yield curve
-scenarios. The package offers two simulation methods:</p>
-<ol style="list-style-type: decimal">
-<li>
-<strong>Basic Simulation</strong>: Using standard discretization
-methods</li>
-<li>
-<strong>Advanced Simulation</strong>: Using the YUIMA package for
-accurate SDE simulation (covered in the YUIMA integration vignette)</li>
-</ol>
-<p>Here we’ll demonstrate the basic simulation:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Convert dynamics to simulation parameters</span></span>
-<span><span class="va">sim_params</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/dns_dynamics_to_sim_params.html">dns_dynamics_to_sim_params</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">)</span></span>
+<p>The factor system is a linear SDE whose diffusion does not depend on
+the state, so its transition law over any step is a known Gaussian.
+<code>engine = "exact"</code> samples that law directly: no
+discretisation error at any step size, and no extra package.</p>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">latest_row</span> <span class="op">&lt;-</span> <span class="va">monthly_fit</span><span class="op">$</span><span class="va">parameters</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.max</a></span><span class="op">(</span><span class="va">monthly_fit</span><span class="op">$</span><span class="va">parameters</span><span class="op">$</span><span class="va">Date</span><span class="op">)</span>, <span class="op">]</span></span>
+<span><span class="va">initial_factors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">latest_row</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta1"</span>, <span class="st">"beta2"</span>, <span class="st">"beta3"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Get initial factors from most recent observation</span></span>
-<span><span class="va">initial_factors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">dns_result</span><span class="op">$</span><span class="va">parameters</span><span class="op">[</span><span class="fl">1</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta1"</span>, <span class="st">"beta2"</span>, <span class="st">"beta3"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="va">sim_params</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/dns_dynamics_to_sim_params.html">dns_dynamics_to_sim_params</a></span><span class="op">(</span><span class="va">dynamics</span>, lambda <span class="op">=</span> <span class="va">latest_row</span><span class="op">$</span><span class="va">lambda</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Simulate yield curves</span></span>
-<span><span class="va">sim_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_dns_yield_curves.html">simulate_dns_yield_curves</a></span><span class="op">(</span></span>
+<span><span class="va">simulation</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_dns_yield_curves.html">simulate_dns_yield_curves</a></span><span class="op">(</span></span>
 <span>  params <span class="op">=</span> <span class="va">sim_params</span>,</span>
 <span>  initial_factors <span class="op">=</span> <span class="va">initial_factors</span>,</span>
-<span>  maturities <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">yield_data</span><span class="op">)</span><span class="op">[</span><span class="op">-</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>  time_horizon <span class="op">=</span> <span class="fl">5</span>,   <span class="co"># 5 years</span></span>
-<span>  n_steps <span class="op">=</span> <span class="fl">60</span>,       <span class="co"># Monthly steps</span></span>
-<span>  n_paths <span class="op">=</span> <span class="fl">100</span>       <span class="co"># 100 simulation paths</span></span>
+<span>  maturities <span class="op">=</span> <span class="va">maturities</span>,</span>
+<span>  time_horizon <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  n_steps <span class="op">=</span> <span class="fl">60</span>,</span>
+<span>  n_paths <span class="op">=</span> <span class="fl">500</span>,</span>
+<span>  engine <span class="op">=</span> <span class="st">"exact"</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">1</span></span>
 <span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Plot simulated yield curves at specific horizons</span></span>
-<span><span class="va">yield_plots</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_simulated_yields.html">plot_simulated_yields</a></span><span class="op">(</span></span>
-<span>  <span class="va">sim_result</span>, </span>
-<span>  time_points <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">3</span>, <span class="fl">5</span><span class="op">)</span>,  <span class="co"># Now, 1 year, 3 years, 5 years</span></span>
-<span>  path_subset <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span>             <span class="co"># Show 5 paths</span></span>
+<span><span class="va">simulation</span></span>
+<span><span class="co">#&gt; DNS simulation</span></span>
+<span><span class="co">#&gt;   500 paths, 60 steps over 5 years</span></span>
+<span><span class="co">#&gt;   engine           exact</span></span>
+<span><span class="co">#&gt;   terminal factors 0.0482  -0.0203  -0.0152</span></span>
+<span><span class="co">#&gt;     (sd)           0.0558  0.0402  0.1008</span></span>
+<span><span class="co">#&gt;   maturities        0.0833  0.2500  0.5000  1.0000  2.0000  3.0000  5.0000  7.0000 10.0000 20.0000 30.0000</span></span>
+<span><span class="co">#&gt;   terminal yields  2.79  2.79  2.80  2.81  2.82  2.84  2.88  2.92  2.99  3.22  3.43 (% mean)</span></span></code></pre></div>
+<p>Simulated curves at a few horizons. The facets follow the calendar
+rather than sorting lexically, so “Year 5” comes after “Year 3”:</p>
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">yield_plots</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_simulated_yields.html">plot_simulated_yields</a></span><span class="op">(</span></span>
+<span>  <span class="va">simulation</span>,</span>
+<span>  time_points <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">3</span>, <span class="fl">5</span><span class="op">)</span>,</span>
+<span>  path_subset <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span></span>
 <span><span class="op">)</span></span>
-<span></span>
 <span><span class="va">yield_plots</span><span class="op">$</span><span class="va">yield_curves</span></span></code></pre></div>
-<p>We can also examine the evolution of the simulated factors:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Plot simulated factors</span></span>
-<span><span class="va">factor_sim_plots</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_simulated_factors.html">plot_simulated_factors</a></span><span class="op">(</span><span class="va">sim_result</span><span class="op">)</span></span>
-<span><span class="va">factor_sim_plots</span><span class="op">$</span><span class="va">level</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/plot_simulated_yields-1.png" class="r-plt" alt="" width="700"></p>
+<p>The factor paths, as a fan of quantiles across all 500 of them:</p>
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_simulated_factors.html">plot_simulated_factors</a></span><span class="op">(</span><span class="va">simulation</span><span class="op">)</span><span class="op">$</span><span class="va">level</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/plot_simulated_factors-1.png" class="r-plt" alt="" width="700"></p>
+<p>The YUIMA engine remains available and is the default, for the
+estimation machinery that comes with it. See
+<code><a href="../articles/dnsr-yuima-integration.html">vignette("dnsr-yuima-integration", package = "dnsr")</a></code>.</p>
 </div>
 <div class="section level2">
-<h2 id="advanced-stochastic-simulation">Advanced Stochastic Simulation<a class="anchor" aria-label="anchor" href="#advanced-stochastic-simulation"></a>
+<h2 id="pricing-off-a-fitted-curve">Pricing off a Fitted Curve<a class="anchor" aria-label="anchor" href="#pricing-off-a-fitted-curve"></a>
 </h2>
-<p>For more advanced stochastic simulation using the YUIMA package, we
-can use the enhanced simulation functions:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Check if YUIMA is installed</span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"yuima"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Simulate using YUIMA's Euler-Maruyama scheme</span></span>
-<span>  <span class="va">yuima_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_dns_yield_curves.html">simulate_dns_yield_curves</a></span><span class="op">(</span></span>
-<span>    params <span class="op">=</span> <span class="va">sim_params</span>,</span>
-<span>    initial_factors <span class="op">=</span> <span class="va">initial_factors</span>,</span>
-<span>    maturities <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">yield_data</span><span class="op">)</span><span class="op">[</span><span class="op">-</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>    time_horizon <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>    n_steps <span class="op">=</span> <span class="fl">60</span>,</span>
-<span>    n_paths <span class="op">=</span> <span class="fl">100</span>,</span>
-<span>    sim_method <span class="op">=</span> <span class="st">"euler"</span>  <span class="co"># Use YUIMA's Euler-Maruyama scheme</span></span>
-<span>  <span class="op">)</span></span>
-<span>  </span>
-<span>  <span class="co"># Plot the results</span></span>
-<span>  <span class="va">yuima_plots</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_simulated_yields.html">plot_simulated_yields</a></span><span class="op">(</span></span>
-<span>    <span class="va">yuima_sim</span>, </span>
-<span>    time_points <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">3</span>, <span class="fl">5</span><span class="op">)</span></span>
-<span>  <span class="op">)</span></span>
-<span>  </span>
-<span>  <span class="co"># See the YUIMA integration vignette for more details on advanced simulation</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="visualizing-dns-model-properties">Visualizing DNS Model Properties<a class="anchor" aria-label="anchor" href="#visualizing-dns-model-properties"></a>
-</h2>
-<p>The DNS model’s flexibility comes from its factor loadings structure.
-We can visualize these loadings:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Plot factor loadings</span></span>
-<span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_dns_loadings.html">plot_dns_loadings</a></span><span class="op">(</span></span>
-<span>  maturities <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">30</span>, length.out <span class="op">=</span> <span class="fl">100</span><span class="op">)</span>,</span>
-<span>  lambda <span class="op">=</span> <span class="va">dns_result</span><span class="op">$</span><span class="va">parameters</span><span class="op">$</span><span class="va">lambda</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<p>A fitted curve is only useful if it discounts cashflows. The DNS
+curve gives continuously compounded zero rates, so the discount factor
+at maturity
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>m</mi><annotation encoding="application/x-tex">m</annotation></semantics></math>
+is
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>−</mi><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo stretchy="false" form="postfix">)</mo><mspace width="0.167em"></mspace><mi>m</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">P(m) = \exp(-y(m)\,m)</annotation></semantics></math>:</p>
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">factors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="va">curve</span><span class="op">$</span><span class="va">parameters</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">]</span>, nrow <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">lambda</span> <span class="op">&lt;-</span> <span class="va">curve</span><span class="op">$</span><span class="va">parameters</span><span class="op">[[</span><span class="st">"lambda"</span><span class="op">]</span><span class="op">]</span></span>
+<span></span>
+<span><span class="va">coupon_maturities</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">5</span>, <span class="fl">10</span>, <span class="fl">30</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  maturity <span class="op">=</span> <span class="va">coupon_maturities</span>,</span>
+<span>  zero_pct <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="../reference/calculate_dns_yields.html">calculate_dns_yields</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">coupon_maturities</span>, <span class="va">lambda</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span> <span class="op">*</span> <span class="fl">100</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  discount <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="../reference/dns_discount_factors.html">dns_discount_factors</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">coupon_maturities</span>, <span class="va">lambda</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span>, <span class="fl">4</span><span class="op">)</span>,</span>
+<span>  price_100 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="../reference/dns_zero_prices.html">dns_zero_prices</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">coupon_maturities</span>, <span class="va">lambda</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span>, <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  par_pct <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="../reference/dns_par_yields.html">dns_par_yields</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">coupon_maturities</span>, <span class="va">lambda</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span> <span class="op">*</span> <span class="fl">100</span>, <span class="fl">3</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">p</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="advanced-visualizations">Advanced Visualizations<a class="anchor" aria-label="anchor" href="#advanced-visualizations"></a>
-</h2>
-<p>The package provides several additional visualization functions:</p>
-<div class="section level3">
-<h3 id="heat-map-of-yield-curve-evolution">Heat Map of Yield Curve Evolution<a class="anchor" aria-label="anchor" href="#heat-map-of-yield-curve-evolution"></a>
-</h3>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Create a heat map of yield curve evolution</span></span>
-<span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_yield_heatmap.html">plot_yield_heatmap</a></span><span class="op">(</span><span class="va">yield_data</span><span class="op">)</span></span>
-<span><span class="va">p</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="d-yield-surface">3D Yield Surface<a class="anchor" aria-label="anchor" href="#d-yield-surface"></a>
-</h3>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Create a 3D visualization (requires plotly)</span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"plotly"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">surface</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_yield_surface.html">plot_yield_surface</a></span><span class="op">(</span><span class="va">yield_data</span><span class="op">)</span></span>
-<span>  <span class="co"># For non-interactive output:</span></span>
-<span>  <span class="co"># plotly::orca(surface, "yield_surface.png")</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="pca-analysis">PCA Analysis<a class="anchor" aria-label="anchor" href="#pca-analysis"></a>
-</h3>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Perform principal component analysis</span></span>
-<span><span class="va">pca_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_yield_pca.html">plot_yield_pca</a></span><span class="op">(</span><span class="va">yield_data</span><span class="op">)</span></span>
-<span><span class="va">pca_result</span><span class="op">$</span><span class="va">plots</span><span class="op">$</span><span class="va">weights</span></span></code></pre></div>
-</div>
-</div>
-<div class="section level2">
-<h2 id="model-comparison">Model Comparison<a class="anchor" aria-label="anchor" href="#model-comparison"></a>
-</h2>
-<p>The DNS model can be compared to other term structure models:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Compare DNS with other models for a specific date</span></span>
-<span><span class="va">comparison</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compare_term_structure_models.html">compare_term_structure_models</a></span><span class="op">(</span></span>
-<span>  <span class="va">yield_data</span>,</span>
-<span>  date_to_compare <span class="op">=</span> <span class="va">yield_data</span><span class="op">$</span><span class="va">Date</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>,</span>
-<span>  models <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"NS"</span>, <span class="st">"Spline"</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   maturity zero_pct discount price_100 par_pct</span></span>
+<span><span class="co">#&gt; 1      0.5    4.293   0.9788     97.88   4.339</span></span>
+<span><span class="co">#&gt; 2      1.0    4.249   0.9584     95.84   4.295</span></span>
+<span><span class="co">#&gt; 3      2.0    4.227   0.9189     91.89   4.272</span></span>
+<span><span class="co">#&gt; 4      5.0    4.361   0.8041     80.41   4.400</span></span>
+<span><span class="co">#&gt; 5     10.0    4.596   0.6316     63.16   4.614</span></span>
+<span><span class="co">#&gt; 6     30.0    4.853   0.2332     23.32   4.827</span></span></code></pre></div>
+<p>Par yields are the coupon rate that prices a bullet bond at par. They
+differ from the zero yields for two reasons that can pull in opposite
+directions: a compounding convention term, since the curve is
+continuously compounded while the par rate pays twice a year, and a
+shape term, since coupons are discounted at the earlier rates rather
+than the terminal one. The first dominates at the short end and the
+second further out.</p>
+<p>Forward rates come off the same factors:</p>
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
+<span>  spot <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="../reference/calculate_dns_yields.html">calculate_dns_yields</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">coupon_maturities</span>, <span class="va">lambda</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span> <span class="op">*</span> <span class="fl">100</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  forward <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="../reference/calculate_dns_forwards.html">calculate_dns_forwards</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">coupon_maturities</span>, <span class="va">lambda</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span> <span class="op">*</span> <span class="fl">100</span>, <span class="fl">3</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">comparison</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
+<span><span class="co">#&gt;          [,1]  [,2]  [,3]  [,4]  [,5]  [,6]</span></span>
+<span><span class="co">#&gt; spot    4.293 4.249 4.227 4.361 4.596 4.853</span></span>
+<span><span class="co">#&gt; forward 4.234 4.188 4.244 4.649 4.936 4.988</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="conclusion">Conclusion<a class="anchor" aria-label="anchor" href="#conclusion"></a>
+<h2 id="looking-at-the-panel">Looking at the Panel<a class="anchor" aria-label="anchor" href="#looking-at-the-panel"></a>
 </h2>
-<p>The <code>dnsr</code> package provides a comprehensive framework for
-yield curve modeling using the Dynamic Nelson-Siegel approach. It offers
-tools for:</p>
-<ol style="list-style-type: decimal">
-<li>Downloading and preprocessing Treasury yield data</li>
-<li>Fitting the DNS model to historical data</li>
-<li>Estimating factor dynamics</li>
-<li>Simulating future yield curve scenarios</li>
-<li>Visualizing results in various formats</li>
-</ol>
-<p>For advanced stochastic simulation using the YUIMA package, please
-refer to the dedicated vignette:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"dnsr-yuima-integration"</span>, package <span class="op">=</span> <span class="st">"dnsr"</span><span class="op">)</span></span></code></pre></div>
-<p>These capabilities make it valuable for interest rate risk
-management, ALM modeling, economic scenario generation, and fixed income
-research.</p>
-<p>For more details on specific functions, please refer to their
-documentation.</p>
+<p>A heatmap of the whole panel shows the 2020 collapse to near-zero
+short rates and the 2022-2023 inversion:</p>
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_yield_heatmap.html">plot_yield_heatmap</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/heatmap-1.png" class="r-plt" alt="" width="700"></p>
+<p>Principal components of the daily changes. Decomposing the covariance
+matrix rather than standardising each maturity first is the usual
+convention for yield curves, and is what produces the familiar level,
+slope and curvature shapes:</p>
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pca</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_yield_pca.html">plot_yield_pca</a></span><span class="op">(</span><span class="va">treasury_yields</span>, scale <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">pca</span><span class="op">$</span><span class="va">var_explained</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">]</span>, <span class="fl">4</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 0.7160 0.1087 0.0991</span></span>
+<span><span class="va">pca</span><span class="op">$</span><span class="va">plots</span><span class="op">$</span><span class="va">weights</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/pca-1.png" class="r-plt" alt="" width="700"></p>
+<p>The first three components are the empirical counterpart of the
+model’s three factors, which is the reason a three-factor curve works as
+well as it does.</p>
+</div>
+<div class="section level2">
+<h2 id="comparing-term-structure-models">Comparing Term Structure Models<a class="anchor" aria-label="anchor" href="#comparing-term-structure-models"></a>
+</h2>
+<p><code><a href="../reference/compare_term_structure_models.html">compare_term_structure_models()</a></code> fits several curves to
+one cross-section and reports the error of each, in basis points:</p>
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">comparison</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compare_term_structure_models.html">compare_term_structure_models</a></span><span class="op">(</span></span>
+<span>  <span class="va">treasury_yields</span>,</span>
+<span>  models <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"NS"</span>, <span class="st">"NSS"</span>, <span class="st">"Spline"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">comparison</span><span class="op">$</span><span class="va">metrics</span></span>
+<span><span class="co">#&gt;                    Model     RMSE      MAE  MaxError</span></span>
+<span><span class="co">#&gt; 1          Nelson-Siegel 8.873355 7.506098 15.404612</span></span>
+<span><span class="co">#&gt; 2 Nelson-Siegel-Svensson 3.542643 2.502529  8.621915</span></span>
+<span><span class="co">#&gt; 3           Cubic Spline 5.561295 3.995767 11.985578</span></span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">comparison</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
+<p><img src="dns-model-introduction_files/figure-html/comparison_plot-1.png" class="r-plt" alt="" width="700"></p>
+<p>Nelson-Siegel-Svensson adds a second curvature term with its own
+decay, so it nests Nelson-Siegel and must fit at least as well; the
+question is whether the two extra parameters are worth it. A smoothing
+spline will generally beat both on in-sample error while saying nothing
+about the shape, which is the trade the parametric models exist to
+make.</p>
+</div>
+<div class="section level2">
+<h2 id="where-to-go-next">Where to Go Next<a class="anchor" aria-label="anchor" href="#where-to-go-next"></a>
+</h2>
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Live Treasury data, caching and the API key</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"fred-api-setup"</span>, package <span class="op">=</span> <span class="st">"dnsr"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># The YUIMA engine, and quasi-maximum-likelihood estimation</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"dnsr-yuima-integration"</span>, package <span class="op">=</span> <span class="st">"dnsr"</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/get_calibrated_dns_params.html">get_calibrated_dns_params()</a></code> wraps the whole path above
+into one call, from downloading data to returning simulation-ready
+parameters, for when the intermediate objects are not needed.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

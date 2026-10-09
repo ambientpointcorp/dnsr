@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,7 +62,7 @@
                         <h4 data-toc-skip class="author">dnsr
 package</h4>
             
-            <h4 data-toc-skip class="date">2026-10-08</h4>
+            <h4 data-toc-skip class="date">2026-10-09</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/ambientpointcorp/dnsr/blob/main/vignettes/dnsr-yuima-integration.Rmd" class="external-link"><code>vignettes/dnsr-yuima-integration.Rmd</code></a></small>
       <div class="d-none name"><code>dnsr-yuima-integration.Rmd</code></div>
@@ -140,23 +140,39 @@ is the volatility matrix (incorporating correlations) -
 is a vector of correlated Brownian motions</p>
 </div>
 <div class="section level2">
-<h2 id="why-yuima-for-sde-simulation">Why YUIMA for SDE Simulation?<a class="anchor" aria-label="anchor" href="#why-yuima-for-sde-simulation"></a>
+<h2 id="two-engines-and-when-each-one-earns-its-keep">Two Engines, and When Each One Earns Its Keep<a class="anchor" aria-label="anchor" href="#two-engines-and-when-each-one-earns-its-keep"></a>
 </h2>
-<p>The YUIMA package offers several advantages for simulating the DNS
-model:</p>
-<ol style="list-style-type: decimal">
-<li><p><strong>Accurate Numerical Schemes</strong>: Implements
-established methods for SDE simulation, such as Euler-Maruyama and
-Milstein schemes, which provide better numerical accuracy than simple
-discretization.</p></li>
-<li><p><strong>Multivariate Processes</strong>: Handles multivariate
-stochastic processes with correlations in a mathematically rigorous
-way.</p></li>
-<li><p><strong>Statistical Estimation</strong>: Provides maximum
-likelihood and method of moments estimators for SDE parameters.</p></li>
-<li><p><strong>Integration with R</strong>: Seamlessly works within the
-R ecosystem, making it a natural fit for our package.</p></li>
-</ol>
+<p><code><a href="../reference/simulate_dns_factors.html">simulate_dns_factors()</a></code> offers two engines.</p>
+<p><code>engine = "yuima"</code>, the default, builds a YUIMA model
+object and discretises it. What that buys is the rest of the YUIMA
+ecosystem: multivariate processes handled rigorously, and the
+quasi-maximum-likelihood and method-of-moments estimators used later in
+this vignette. It is also the route to take if you want to extend the
+model into something YUIMA supports and this package does not.</p>
+<p><code>engine = "exact"</code> does not discretise at all. The DNS
+factor system is a linear SDE whose diffusion does not depend on the
+state, so its transition density over a step of length
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">\Delta t</annotation></semantics></math>
+is Gaussian with a mean and covariance available in closed form:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>E</mi><mo stretchy="false" form="prefix">[</mo><msub><mi>β</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mi>t</mi><mo stretchy="false" form="postfix">)</mo><mo>∣</mo><mi>β</mi><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="false" form="postfix">]</mo><mo>=</mo><msub><mi>θ</mi><mi>i</mi></msub><mo>+</mo><mo stretchy="false" form="prefix">(</mo><msub><mi>β</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo><mo>−</mo><msub><mi>θ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><msup><mi>e</mi><mrow><mi>−</mi><msub><mi>κ</mi><mi>i</mi></msub><mi mathvariant="normal">Δ</mi><mi>t</mi></mrow></msup></mrow><annotation encoding="application/x-tex">E[\beta_i(t+\Delta t) \mid \beta(t)] = \theta_i + (\beta_i(t) - \theta_i)e^{-\kappa_i \Delta t}</annotation></semantics></math></p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mrow><mi mathvariant="normal">C</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">v</mi></mrow><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><msub><mi>ρ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mspace width="0.167em"></mspace><msub><mi>σ</mi><mi>i</mi></msub><msub><mi>σ</mi><mi>j</mi></msub><mspace width="0.167em"></mspace><mfrac><mrow><mn>1</mn><mo>−</mo><msup><mi>e</mi><mrow><mi>−</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>κ</mi><mi>i</mi></msub><mo>+</mo><msub><mi>κ</mi><mi>j</mi></msub><mo stretchy="false" form="postfix">)</mo><mi mathvariant="normal">Δ</mi><mi>t</mi></mrow></msup></mrow><mrow><msub><mi>κ</mi><mi>i</mi></msub><mo>+</mo><msub><mi>κ</mi><mi>j</mi></msub></mrow></mfrac></mrow><annotation encoding="application/x-tex">\mathrm{Cov}_{ij} = \rho_{ij}\,\sigma_i\sigma_j\,\frac{1 - e^{-(\kappa_i + \kappa_j)\Delta t}}{\kappa_i + \kappa_j}</annotation></semantics></math></p>
+<p>Sampling that law directly is exact at every step size, needs no
+extra package, and is about two orders of magnitude faster, because one
+vectorised draw replaces one YUIMA call per path.</p>
+<p>Note the covariance: it couples the two reversion speeds. Using each
+factor’s own step variance together with a Cholesky factor of the
+correlation matrix – the obvious implementation – is only correct when
+every
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
+is equal.</p>
+<p>A note on <code>sim_method</code>. Both <code>"euler"</code> and
+<code>"milstein"</code> are accepted by the YUIMA engine, but the
+Milstein correction term is proportional to the derivative of the
+diffusion with respect to the state, and here that diffusion is
+constant. The term vanishes, so the two schemes coincide for this model
+and <code>"milstein"</code> buys no accuracy. What governs accuracy on
+the YUIMA path is <code>n_steps</code>; what removes the question is
+<code>engine = "exact"</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="simulating-dns-factors-with-yuima">Simulating DNS Factors with YUIMA<a class="anchor" aria-label="anchor" href="#simulating-dns-factors-with-yuima"></a>
@@ -362,46 +378,23 @@ factor simulation and yield curve calculation in a single step:</p>
 <span>    n_steps <span class="op">=</span> <span class="fl">60</span>,</span>
 <span>    n_paths <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>    include_correlation <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>    sim_method <span class="op">=</span> <span class="st">"euler"</span>  <span class="co"># Can also use "milstein" for higher accuracy</span></span>
+<span>    sim_method <span class="op">=</span> <span class="st">"euler"</span></span>
 <span>  <span class="op">)</span></span>
 <span><span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>  <span class="co"># Create a simplified simulation for demonstration</span></span>
-<span>  <span class="co"># This follows the same structure but doesn't use YUIMA</span></span>
-<span>  <span class="va">time</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">5</span>, length.out <span class="op">=</span> <span class="fl">61</span><span class="op">)</span></span>
-<span>  <span class="va">factors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/array.html" class="external-link">array</a></span><span class="op">(</span><span class="fl">0</span>, dim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">61</span>, <span class="fl">10</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
-<span>  </span>
-<span>  <span class="co"># Create simplified simulation</span></span>
-<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">p</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="kw">for</span> <span class="op">(</span><span class="va">f</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">)</span> <span class="op">{</span></span>
-<span>      <span class="co"># Parameters for this factor</span></span>
-<span>      <span class="va">kappa</span> <span class="op">&lt;-</span> <span class="va">params</span><span class="op">$</span><span class="va">kappa</span><span class="op">[</span><span class="va">f</span><span class="op">]</span></span>
-<span>      <span class="va">theta</span> <span class="op">&lt;-</span> <span class="va">params</span><span class="op">$</span><span class="va">theta</span><span class="op">[</span><span class="va">f</span><span class="op">]</span></span>
-<span>      <span class="va">sigma</span> <span class="op">&lt;-</span> <span class="va">params</span><span class="op">$</span><span class="va">sigma</span><span class="op">[</span><span class="va">f</span><span class="op">]</span></span>
-<span>      </span>
-<span>      <span class="co"># Initial value</span></span>
-<span>      <span class="va">factors</span><span class="op">[</span><span class="fl">1</span>, <span class="va">p</span>, <span class="va">f</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">initial_factors</span><span class="op">[</span><span class="va">f</span><span class="op">]</span></span>
-<span>      </span>
-<span>      <span class="co"># Simple discretization</span></span>
-<span>      <span class="kw">for</span> <span class="op">(</span><span class="va">t</span> <span class="kw">in</span> <span class="fl">2</span><span class="op">:</span><span class="fl">61</span><span class="op">)</span> <span class="op">{</span></span>
-<span>        <span class="va">dt</span> <span class="op">&lt;-</span> <span class="va">time</span><span class="op">[</span><span class="va">t</span><span class="op">]</span> <span class="op">-</span> <span class="va">time</span><span class="op">[</span><span class="va">t</span><span class="op">-</span><span class="fl">1</span><span class="op">]</span></span>
-<span>        <span class="va">dW</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0</span>, <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="va">dt</span><span class="op">)</span><span class="op">)</span></span>
-<span>        <span class="va">factors</span><span class="op">[</span><span class="va">t</span>, <span class="va">p</span>, <span class="va">f</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">factors</span><span class="op">[</span><span class="va">t</span><span class="op">-</span><span class="fl">1</span>, <span class="va">p</span>, <span class="va">f</span><span class="op">]</span> <span class="op">+</span> </span>
-<span>          <span class="va">kappa</span> <span class="op">*</span> <span class="op">(</span><span class="va">theta</span> <span class="op">-</span> <span class="va">factors</span><span class="op">[</span><span class="va">t</span><span class="op">-</span><span class="fl">1</span>, <span class="va">p</span>, <span class="va">f</span><span class="op">]</span><span class="op">)</span> <span class="op">*</span> <span class="va">dt</span> <span class="op">+</span> </span>
-<span>          <span class="va">sigma</span> <span class="op">*</span> <span class="va">dW</span></span>
-<span>      <span class="op">}</span></span>
-<span>    <span class="op">}</span></span>
-<span>  <span class="op">}</span></span>
-<span>  </span>
-<span>  <span class="co"># Calculate yields</span></span>
-<span>  <span class="va">yields</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calculate_dns_yields.html">calculate_dns_yields</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">maturities</span>, <span class="fl">0.0609</span><span class="op">)</span></span>
-<span>  </span>
-<span>  <span class="va">full_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>    yields <span class="op">=</span> <span class="va">yields</span>,</span>
-<span>    factors <span class="op">=</span> <span class="va">factors</span>,</span>
-<span>    time <span class="op">=</span> <span class="va">time</span>,</span>
-<span>    maturities <span class="op">=</span> <span class="va">maturities</span>,</span>
+<span>  <span class="co"># No YUIMA here, so use the exact engine, which needs no extra package. It</span></span>
+<span>  <span class="co"># samples the factor system's transition law directly rather than</span></span>
+<span>  <span class="co"># discretising it, so this is not a degraded substitute: it carries no</span></span>
+<span>  <span class="co"># discretisation error at all.</span></span>
+<span>  <span class="va">full_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulate_dns_yield_curves.html">simulate_dns_yield_curves</a></span><span class="op">(</span></span>
 <span>    params <span class="op">=</span> <span class="va">params</span>,</span>
-<span>    lambda <span class="op">=</span> <span class="fl">0.0609</span></span>
+<span>    initial_factors <span class="op">=</span> <span class="va">initial_factors</span>,</span>
+<span>    maturities <span class="op">=</span> <span class="va">maturities</span>,</span>
+<span>    lambda <span class="op">=</span> <span class="fl">0.0609</span>,</span>
+<span>    time_horizon <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>    n_steps <span class="op">=</span> <span class="fl">60</span>,</span>
+<span>    n_paths <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>    include_correlation <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>    engine <span class="op">=</span> <span class="st">"exact"</span></span>
 <span>  <span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="co">#&gt; Warning in yuima.warn("'delta' (re)defined."): </span></span>
@@ -437,18 +430,13 @@ factor simulation and yield curve calculation in a single step:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Plot the distribution</span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">summary_df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">Maturity</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>y <span class="op">=</span> <span class="va">Mean</span><span class="op">)</span>, color <span class="op">=</span> <span class="st">"blue"</span>, size <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>y <span class="op">=</span> <span class="va">Mean</span><span class="op">)</span>, color <span class="op">=</span> <span class="st">"blue"</span>, linewidth <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_ribbon.html" class="external-link">geom_ribbon</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>ymin <span class="op">=</span> <span class="va">Q10</span>, ymax <span class="op">=</span> <span class="va">Q90</span><span class="op">)</span>, alpha <span class="op">=</span> <span class="fl">0.2</span>, fill <span class="op">=</span> <span class="st">"blue"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Distribution of Simulated Yield Curves at Final Time"</span>,</span>
 <span>       subtitle <span class="op">=</span> <span class="st">"Mean with 10% and 90% quantiles"</span>,</span>
 <span>       x <span class="op">=</span> <span class="st">"Maturity (years)"</span>,</span>
 <span>       y <span class="op">=</span> <span class="st">"Yield (%)"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Please use `linewidth` instead.</span></span>
-<span><span class="co">#&gt; <span style="color: #555555;">This warning is displayed once per session.</span></span></span>
-<span><span class="co">#&gt; <span style="color: #555555;">Call `lifecycle::last_lifecycle_warnings()` to see where this warning was</span></span></span>
-<span><span class="co">#&gt; <span style="color: #555555;">generated.</span></span></span></code></pre></div>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="dnsr-yuima-integration_files/figure-html/plot_distribution-1.png" class="r-plt" alt="" width="800"></p>
 </div>
 <div class="section level2">
@@ -536,6 +524,78 @@ then try to recover the parameters:</p>
 <span><span class="co">#&gt; sigma1     sigma     Level  0.005  0.004884389</span></span>
 <span><span class="co">#&gt; sigma2     sigma     Slope  0.010  0.009703772</span></span>
 <span><span class="co">#&gt; sigma3     sigma Curvature  0.020  0.019684358</span></span></code></pre></div>
+<p>Read that table carefully, because it is the most useful thing in
+this vignette.</p>
+<p>The volatilities come back almost exactly:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>σ</mi><annotation encoding="application/x-tex">\sigma</annotation></semantics></math>
+is identified by high-frequency variation, and 500 observations over two
+years supply plenty of it. The reversion speeds do not, and the size of
+the error follows the ratio of each factor’s half-life to the length of
+the sample:</p>
+<table class="table">
+<colgroup>
+<col width="20%">
+<col width="20%">
+<col width="20%">
+<col width="20%">
+<col width="20%">
+</colgroup>
+<thead><tr class="header">
+<th align="left">factor</th>
+<th align="right">true
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
+</th>
+<th align="right">implied half-life</th>
+<th align="right">sample</th>
+<th align="right"><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover><mi>κ</mi><mo accent="true">̂</mo></mover><mi>/</mi><mi>κ</mi></mrow><annotation encoding="application/x-tex">\hat\kappa / \kappa</annotation></semantics></math></th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">level</td>
+<td align="right">0.02</td>
+<td align="right">34.7 years</td>
+<td align="right">2 years</td>
+<td align="right">~120x</td>
+</tr>
+<tr class="even">
+<td align="left">slope</td>
+<td align="right">0.30</td>
+<td align="right">2.3 years</td>
+<td align="right">2 years</td>
+<td align="right">~7x</td>
+</tr>
+<tr class="odd">
+<td align="left">curvature</td>
+<td align="right">0.50</td>
+<td align="right">1.4 years</td>
+<td align="right">2 years</td>
+<td align="right">~1.3x</td>
+</tr>
+</tbody>
+</table>
+<p>No estimator can recover a 35-year half-life from two years of data,
+and this one does not pretend to: it returns a large
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
+because, over a window that short, a slowly reverting series is
+indistinguishable from a random walk, and a random walk looks like fast
+reversion to a mean that happens to sit where the data is.
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
+inherits the problem, since the level a process reverts to is only
+identified if the reversion itself is.</p>
+<p>So the practical reading is that
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>σ</mi><annotation encoding="application/x-tex">\sigma</annotation></semantics></math>
+and the correlation structure are the parts of these dynamics a short
+sample pins down;
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
+and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
+need either a long history or a prior.
+<code><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics()</a></code> reports standard errors and a
+half-life confidence interval for exactly this reason – see
+<code><a href="../articles/dns-model-introduction.html">vignette("dns-model-introduction", package = "dnsr")</a></code> – and
+the interval is usually wide enough to make the point on its own.</p>
+<p>The same caution applies to the regression estimator, not just to
+QMLE. It is a property of the data, not of the method.</p>
 </div>
 <div class="section level2">
 <h2 id="conclusion">Conclusion<a class="anchor" aria-label="anchor" href="#conclusion"></a>

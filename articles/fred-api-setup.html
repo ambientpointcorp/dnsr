@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,7 +62,7 @@
                         <h4 data-toc-skip class="author">dnsr
 package</h4>
             
-            <h4 data-toc-skip class="date">2026-10-08</h4>
+            <h4 data-toc-skip class="date">2026-10-09</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/ambientpointcorp/dnsr/blob/main/vignettes/fred-api-setup.Rmd" class="external-link"><code>vignettes/fred-api-setup.Rmd</code></a></small>
       <div class="d-none name"><code>fred-api-setup.Rmd</code></div>
@@ -76,6 +76,19 @@ package</h4>
 <p>Before using the <code>dnsr</code> package to fetch Treasury yield
 data, you need to set up access to the Federal Reserve Economic Data
 (FRED) API.</p>
+<p>You may not need one yet. The package ships
+<code>treasury_yields</code>, a six-year panel of real U.S. Treasury
+curves, and every example in
+<code><a href="../articles/dns-model-introduction.html">vignette("dns-model-introduction", package = "dnsr")</a></code> runs
+against it:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/ambientpointcorp/dnsr" class="external-link">dnsr</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 1501   12</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">$</span><span class="va">Date</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] "2019-01-02" "2024-12-31"</span></span></code></pre></div>
+<p>A key is for live or longer histories.</p>
 <div class="section level3">
 <h3 id="getting-a-fred-api-key">Getting a FRED API Key<a class="anchor" aria-label="anchor" href="#getting-a-fred-api-key"></a>
 </h3>
@@ -101,7 +114,7 @@ data, you need to set up access to the Federal Reserve Economic Data
 <li>
 <strong>Set up your API key in R</strong>:</li>
 </ol>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Option 1: Set for current R session only</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/Sys.setenv.html" class="external-link">Sys.setenv</a></span><span class="op">(</span>fred_api_key <span class="op">=</span> <span class="st">"your_api_key_here"</span><span class="op">)</span></span>
 <span></span>
@@ -115,7 +128,7 @@ data, you need to set up access to the Federal Reserve Economic Data
 <h3 id="verifying-your-setup">Verifying Your Setup<a class="anchor" aria-label="anchor" href="#verifying-your-setup"></a>
 </h3>
 <p>After setting your API key, verify it works:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Try fetching a small amount of data</span></span>
 <span><span class="va">test_data</span> <span class="op">&lt;-</span> <span class="fu">dnsr</span><span class="fu">::</span><span class="fu"><a href="../reference/fetch_fred_series.html">fetch_fred_series</a></span><span class="op">(</span></span>
 <span>  series_id <span class="op">=</span> <span class="st">"DGS10"</span>,</span>
@@ -146,7 +159,7 @@ these limits.</p>
 <pre><code>Error: FRED API key not found. Set fred_api_key environment variable or pass api_key parameter.</code></pre>
 <p><strong>Solution</strong>: Make sure you’ve set the environment
 variable. Check with:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"fred_api_key"</span><span class="op">)</span></span></code></pre></div>
 <p>If it returns an empty string, your key isn’t set. Use
 <code><a href="https://rdrr.io/r/base/Sys.setenv.html" class="external-link">Sys.setenv()</a></code> to set it.</p>
@@ -165,23 +178,39 @@ down</strong>: Check <a href="https://fred.stlouisfed.org/" class="external-link
 </h4>
 <p>If you hit rate limits:</p>
 <pre><code>Error: FRED API request failed with status 429: Too Many Requests</code></pre>
-<p><strong>Solution</strong>: Wait one minute before retrying, or
-implement caching:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Cache data to avoid repeated API calls</span></span>
-<span><span class="va">cache_file</span> <span class="op">&lt;-</span> <span class="st">"treasury_data_cache.rds"</span></span>
+<p><strong>Solution</strong>: both retrying and caching are built in, so
+neither needs to be written by hand.</p>
+<p>Requests are retried with exponential backoff on transient failures.
+A 4xx response is not retried, because a rejected key or an unknown
+series id will not succeed on a second attempt:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Five attempts rather than the default three</span></span>
+<span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span>start_date <span class="op">=</span> <span class="st">"2020-01-01"</span>,</span>
+<span>                                          retries <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
+<p><code>cache_dir</code> keeps responses on disk and serves them
+instead of re-requesting:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span></span>
+<span>  start_date <span class="op">=</span> <span class="st">"2020-01-01"</span>,</span>
+<span>  cache_dir <span class="op">=</span> <span class="st">"~/.cache/dnsr-fred"</span></span>
+<span><span class="op">)</span></span>
 <span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">cache_file</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Load from cache if recent (&lt; 24 hours old)</span></span>
-<span>  <span class="va">cache</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="va">cache_file</span><span class="op">)</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/difftime.html" class="external-link">difftime</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span>, <span class="va">cache</span><span class="op">$</span><span class="va">timestamp</span>, units <span class="op">=</span> <span class="st">"hours"</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">24</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="va">cache</span><span class="op">$</span><span class="va">data</span></span>
-<span>  <span class="op">}</span></span>
-<span><span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>  <span class="co"># Fetch fresh data</span></span>
-<span>  <span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span>start_date <span class="op">=</span> <span class="st">"2020-01-01"</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">yield_data</span>, timestamp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span>, <span class="va">cache_file</span><span class="op">)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
+<span><span class="co"># A second call with the same series and dates reads from disk</span></span>
+<span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span></span>
+<span>  start_date <span class="op">=</span> <span class="st">"2020-01-01"</span>,</span>
+<span>  cache_dir <span class="op">=</span> <span class="st">"~/.cache/dnsr-fred"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Two properties of the cache are worth knowing. Keys cover the series
+id and the requested date range only, so <strong>the API key is never
+part of a key and is never written to disk</strong>. And a cache hit is
+served <em>before</em> the key is looked up, which means a cached corpus
+can be replayed with no key configured at all – useful in CI, or for
+making an analysis reproducible by someone who has no key of their
+own.</p>
+<p>The cache never expires on its own. Delete the directory, or the file
+for one series, when you want fresh data; an open-ended
+<code>end_date</code> will otherwise keep returning the range you first
+asked for.</p>
 </div>
 </div>
 <div class="section level3">
@@ -202,7 +231,7 @@ own keys</li>
 <h2 id="loading-the-package">Loading the Package<a class="anchor" aria-label="anchor" href="#loading-the-package"></a>
 </h2>
 <p>Now that FRED API access is set up, load the package:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/ambientpointcorp/dnsr" class="external-link">dnsr</a></span><span class="op">)</span></span></code></pre></div>
 <hr>
 <p>[Rest of vignette content continues here…]</p>
@@ -212,7 +241,7 @@ own keys</li>
 <h2 id="example-fetching-recent-treasury-data">Example: Fetching Recent Treasury Data<a class="anchor" aria-label="anchor" href="#example-fetching-recent-treasury-data"></a>
 </h2>
 <p>With your API key configured, fetching Treasury data is simple:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Get the last 2 years of data for all maturities</span></span>
 <span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span></span>
 <span>  start_date <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.Date</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">365</span> <span class="op">*</span> <span class="fl">2</span>,</span>
@@ -226,7 +255,7 @@ own keys</li>
 <h3 id="selecting-specific-maturities">Selecting Specific Maturities<a class="anchor" aria-label="anchor" href="#selecting-specific-maturities"></a>
 </h3>
 <p>You can also fetch only specific maturities:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Get only 2, 5, 10, and 30-year yields</span></span>
 <span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_data.html">get_treasury_yield_data</a></span><span class="op">(</span></span>
 <span>  maturities <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2"</span>, <span class="st">"5"</span>, <span class="st">"10"</span>, <span class="st">"30"</span><span class="op">)</span>,</span>
@@ -243,6 +272,53 @@ Medium-term: <code>"1"</code>, <code>"2"</code>, <code>"3"</code>,
 </div>
 </div>
 <div class="section level2">
+<h2 id="missing-observations">Missing Observations<a class="anchor" aria-label="anchor" href="#missing-observations"></a>
+</h2>
+<p>FRED emits a row for every weekday and reports market holidays as
+<code>"."</code>, which arrives as <code>NA</code>. Long series also
+have genuine multi-year holes: DGS20 has no observations before 1993,
+and DGS30 none between 2002 and 2006.</p>
+<p>By default gaps are filled by carrying the last observation forward
+<strong>in calendar time</strong>:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Default: gaps take the value of the most recent earlier observation</span></span>
+<span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span>start_date <span class="op">=</span> <span class="st">"1990-01-01"</span><span class="op">)</span></span></code></pre></div>
+<p>The direction matters more than it may appear. The frame is returned
+most-recent-first, so filling in row order would take each missing yield
+from a <em>later</em> date, putting information into the past that did
+not exist there – look-ahead bias in anything calibrated on the
+result.</p>
+<p>For long histories, cap how far a value may be carried so a
+multi-year hole is not silently bridged:</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Carry at most 5 calendar days; wider gaps stay NA</span></span>
+<span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span>start_date <span class="op">=</span> <span class="st">"1990-01-01"</span>,</span>
+<span>                                          max_gap <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Or leave every gap alone and handle them yourself</span></span>
+<span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span>start_date <span class="op">=</span> <span class="st">"1990-01-01"</span>,</span>
+<span>                                          fill_missing <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> handles <code>NA</code> yields directly:
+maturities with no observation on a date are dropped from that date’s
+fit and reported as <code>NA</code> in the fitted matrix, and a date
+with fewer than three observations is listed in the result’s
+<code>failures</code> rather than silently producing a meaningless
+curve.</p>
+<div class="section level3">
+<h3 id="row-order">Row order<a class="anchor" aria-label="anchor" href="#row-order"></a>
+</h3>
+<p>Rows are returned most-recent-first.
+<code>date_order = "ascending"</code> reverses that if a chronological
+frame is more convenient:</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span>start_date <span class="op">=</span> <span class="st">"2020-01-01"</span>,</span>
+<span>                                          date_order <span class="op">=</span> <span class="st">"ascending"</span><span class="op">)</span></span></code></pre></div>
+<p>Either way, <code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> selects its window by date
+rather than by row position, so <code>n_days</code> means the same thing
+in both.</p>
+</div>
+</div>
+<div class="section level2">
 <h2 id="data-format">Data Format<a class="anchor" aria-label="anchor" href="#data-format"></a>
 </h2>
 <p>The fetched data is returned as a data frame with: - <strong>First
@@ -250,7 +326,7 @@ column</strong>: <code>Date</code> (most recent dates first) -
 <strong>Remaining columns</strong>: Yield values for each maturity (in
 decimal form) - <strong>Column names</strong>: Maturity in years (e.g.,
 <code>"0.25"</code> for 3-month, <code>"10"</code> for 10-year)</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Example data structure:</span></span>
 <span><span class="co">#   Date         0.25    0.5     1       2       5       10      30</span></span>
 <span><span class="co">#   2023-12-31  0.0521  0.0534  0.0489  0.0452  0.0425  0.0398  0.0412</span></span>

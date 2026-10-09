@@ -53,23 +53,47 @@ matrix of mean-reversion speeds - $`\Theta`$ is the vector of long-run
 means - $`\Sigma`$ is the volatility matrix (incorporating
 correlations) - $`W(t)`$ is a vector of correlated Brownian motions
 
-## Why YUIMA for SDE Simulation?
+## Two Engines, and When Each One Earns Its Keep
 
-The YUIMA package offers several advantages for simulating the DNS
-model:
+[`simulate_dns_factors()`](https://ambientpointcorp.github.io/dnsr/reference/simulate_dns_factors.md)
+offers two engines.
 
-1.  **Accurate Numerical Schemes**: Implements established methods for
-    SDE simulation, such as Euler-Maruyama and Milstein schemes, which
-    provide better numerical accuracy than simple discretization.
+`engine = "yuima"`, the default, builds a YUIMA model object and
+discretises it. What that buys is the rest of the YUIMA ecosystem:
+multivariate processes handled rigorously, and the
+quasi-maximum-likelihood and method-of-moments estimators used later in
+this vignette. It is also the route to take if you want to extend the
+model into something YUIMA supports and this package does not.
 
-2.  **Multivariate Processes**: Handles multivariate stochastic
-    processes with correlations in a mathematically rigorous way.
+`engine = "exact"` does not discretise at all. The DNS factor system is
+a linear SDE whose diffusion does not depend on the state, so its
+transition density over a step of length $`\Delta t`$ is Gaussian with a
+mean and covariance available in closed form:
 
-3.  **Statistical Estimation**: Provides maximum likelihood and method
-    of moments estimators for SDE parameters.
+``` math
+E[\beta_i(t+\Delta t) \mid \beta(t)] = \theta_i + (\beta_i(t) - \theta_i)e^{-\kappa_i \Delta t}
+```
 
-4.  **Integration with R**: Seamlessly works within the R ecosystem,
-    making it a natural fit for our package.
+``` math
+\mathrm{Cov}_{ij} = \rho_{ij}\,\sigma_i\sigma_j\,\frac{1 - e^{-(\kappa_i + \kappa_j)\Delta t}}{\kappa_i + \kappa_j}
+```
+
+Sampling that law directly is exact at every step size, needs no extra
+package, and is about two orders of magnitude faster, because one
+vectorised draw replaces one YUIMA call per path.
+
+Note the covariance: it couples the two reversion speeds. Using each
+factor’s own step variance together with a Cholesky factor of the
+correlation matrix – the obvious implementation – is only correct when
+every $`\kappa`$ is equal.
+
+A note on `sim_method`. Both `"euler"` and `"milstein"` are accepted by
+the YUIMA engine, but the Milstein correction term is proportional to
+the derivative of the diffusion with respect to the state, and here that
+diffusion is constant. The term vanishes, so the two schemes coincide
+for this model and `"milstein"` buys no accuracy. What governs accuracy
+on the YUIMA path is `n_steps`; what removes the question is
+`engine = "exact"`.
 
 ## Simulating DNS Factors with YUIMA
 
@@ -293,46 +317,23 @@ if (has_yuima) {
     n_steps = 60,
     n_paths = 10,
     include_correlation = TRUE,
-    sim_method = "euler"  # Can also use "milstein" for higher accuracy
+    sim_method = "euler"
   )
 } else {
-  # Create a simplified simulation for demonstration
-  # This follows the same structure but doesn't use YUIMA
-  time <- seq(0, 5, length.out = 61)
-  factors <- array(0, dim = c(61, 10, 3))
-  
-  # Create simplified simulation
-  for (p in 1:10) {
-    for (f in 1:3) {
-      # Parameters for this factor
-      kappa <- params$kappa[f]
-      theta <- params$theta[f]
-      sigma <- params$sigma[f]
-      
-      # Initial value
-      factors[1, p, f] <- initial_factors[f]
-      
-      # Simple discretization
-      for (t in 2:61) {
-        dt <- time[t] - time[t-1]
-        dW <- rnorm(1, 0, sqrt(dt))
-        factors[t, p, f] <- factors[t-1, p, f] + 
-          kappa * (theta - factors[t-1, p, f]) * dt + 
-          sigma * dW
-      }
-    }
-  }
-  
-  # Calculate yields
-  yields <- calculate_dns_yields(factors, maturities, 0.0609)
-  
-  full_sim <- list(
-    yields = yields,
-    factors = factors,
-    time = time,
-    maturities = maturities,
+  # No YUIMA here, so use the exact engine, which needs no extra package. It
+  # samples the factor system's transition law directly rather than
+  # discretising it, so this is not a degraded substitute: it carries no
+  # discretisation error at all.
+  full_sim <- simulate_dns_yield_curves(
     params = params,
-    lambda = 0.0609
+    initial_factors = initial_factors,
+    maturities = maturities,
+    lambda = 0.0609,
+    time_horizon = 5,
+    n_steps = 60,
+    n_paths = 10,
+    include_correlation = TRUE,
+    engine = "exact"
   )
 }
 #> Warning in yuima.warn("'delta' (re)defined."): 
@@ -372,18 +373,13 @@ Let’s visualize the distribution of final yield curves:
 
 # Plot the distribution
 ggplot(summary_df, aes(x = Maturity)) +
-  geom_line(aes(y = Mean), color = "blue", size = 1) +
+  geom_line(aes(y = Mean), color = "blue", linewidth = 1) +
   geom_ribbon(aes(ymin = Q10, ymax = Q90), alpha = 0.2, fill = "blue") +
   labs(title = "Distribution of Simulated Yield Curves at Final Time",
        subtitle = "Mean with 10% and 90% quantiles",
        x = "Maturity (years)",
        y = "Yield (%)") +
   theme_minimal()
-#> Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
-#> ℹ Please use `linewidth` instead.
-#> This warning is displayed once per session.
-#> Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
-#> generated.
 ```
 
 ![](dnsr-yuima-integration_files/figure-html/plot_distribution-1.png)
@@ -478,6 +474,41 @@ if (!inherits(est_result, "try-error")) {
 #> sigma2     sigma     Slope  0.010  0.009703772
 #> sigma3     sigma Curvature  0.020  0.019684358
 ```
+
+Read that table carefully, because it is the most useful thing in this
+vignette.
+
+The volatilities come back almost exactly: $`\sigma`$ is identified by
+high-frequency variation, and 500 observations over two years supply
+plenty of it. The reversion speeds do not, and the size of the error
+follows the ratio of each factor’s half-life to the length of the
+sample:
+
+| factor    | true $`\kappa`$ | implied half-life |  sample | $`\hat\kappa / \kappa`$ |
+|:----------|----------------:|------------------:|--------:|------------------------:|
+| level     |            0.02 |        34.7 years | 2 years |                   ~120x |
+| slope     |            0.30 |         2.3 years | 2 years |                     ~7x |
+| curvature |            0.50 |         1.4 years | 2 years |                   ~1.3x |
+
+No estimator can recover a 35-year half-life from two years of data, and
+this one does not pretend to: it returns a large $`\kappa`$ because,
+over a window that short, a slowly reverting series is indistinguishable
+from a random walk, and a random walk looks like fast reversion to a
+mean that happens to sit where the data is. $`\theta`$ inherits the
+problem, since the level a process reverts to is only identified if the
+reversion itself is.
+
+So the practical reading is that $`\sigma`$ and the correlation
+structure are the parts of these dynamics a short sample pins down;
+$`\kappa`$ and $`\theta`$ need either a long history or a prior.
+[`estimate_dns_dynamics()`](https://ambientpointcorp.github.io/dnsr/reference/estimate_dns_dynamics.md)
+reports standard errors and a half-life confidence interval for exactly
+this reason – see
+[`vignette("dns-model-introduction", package = "dnsr")`](https://ambientpointcorp.github.io/dnsr/articles/dns-model-introduction.md)
+– and the interval is usually wide enough to make the point on its own.
+
+The same caution applies to the regression estimator, not just to QMLE.
+It is a property of the data, not of the method.
 
 ## Conclusion
 
