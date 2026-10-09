@@ -653,7 +653,10 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
 #' Creates a plot showing the factor loadings of the DNS model.
 #'
 #' @param maturities Numeric vector. Maturities (in years) for which to calculate loadings.
-#' @param lambda Numeric. DNS decay parameter lambda.
+#' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
+#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
+#'   value for maturities in months and places the curvature hump at 29.4
+#'   years rather than months; see \code{\link{ns_lambda}}.
 #' @param show_labels Logical. If TRUE, add labels to the plot.
 #'
 #' @return A ggplot object with the factor loadings plot.

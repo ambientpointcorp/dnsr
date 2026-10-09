@@ -12,7 +12,10 @@
 #'   (time, path, factor); if a matrix, factors for a single path indexed by
 #'   (time, factor). The same shapes \code{\link{calculate_dns_yields}} accepts.
 #' @param maturities Numeric vector. Maturities in years.
-#' @param lambda Numeric. DNS decay parameter lambda.
+#' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
+#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
+#'   value for maturities in months and places the curvature hump at 29.4
+#'   years rather than months; see \code{\link{ns_lambda}}.
 #'
 #' @return An array of discount factors indexed by (time, maturity, path), or a
 #'   matrix indexed by (time, maturity) when \code{factors} is a matrix --
@@ -61,7 +64,10 @@ dns_discount_factors <- function(factors, maturities, lambda = 0.0609) {
 #' @param factors Array or matrix. DNS factors, as in
 #'   \code{\link{dns_discount_factors}}.
 #' @param maturities Numeric vector. Maturities in years.
-#' @param lambda Numeric. DNS decay parameter lambda.
+#' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
+#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
+#'   value for maturities in months and places the curvature hump at 29.4
+#'   years rather than months; see \code{\link{ns_lambda}}.
 #' @param face Numeric. Face value of the bond. Defaults to 100.
 #'
 #' @return Prices in the same shape as \code{\link{dns_discount_factors}}.
@@ -98,7 +104,10 @@ dns_zero_prices <- function(factors, maturities, lambda = 0.0609, face = 100) {
 #'   \code{\link{dns_discount_factors}}.
 #' @param maturities Numeric vector. Maturities in years. Each must be a whole
 #'   number of coupon periods; see Details.
-#' @param lambda Numeric. DNS decay parameter lambda.
+#' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
+#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
+#'   value for maturities in months and places the curvature hump at 29.4
+#'   years rather than months; see \code{\link{ns_lambda}}.
 #' @param frequency Integer. Coupon payments per year. Defaults to 2, the
 #'   U.S. Treasury convention.
 #'

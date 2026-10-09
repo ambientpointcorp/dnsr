@@ -653,3 +653,42 @@ test_that("a genuinely explosive system is reported by each structure", {
   expect_true(any(Re(full$dynamics$eigenvalues) <= 0))
   expect_true(any(grepl("not mean reverting", full$warnings)))
 })
+
+
+# ---- ns_lambda ---------------------------------------------------------------
+
+test_that("ns_lambda puts the curvature peak where it says", {
+  for (peak in c(0.5, 1, 2.5, 10, 30)) {
+    lambda <- ns_lambda(peak)
+    grid <- seq(peak / 20, peak * 20, length.out = 20001)
+    loading <- (1 - exp(-lambda * grid)) / (lambda * grid) - exp(-lambda * grid)
+    expect_equal(grid[which.max(loading)], peak, tolerance = 1e-3)
+  }
+})
+
+test_that("ns_lambda and ns_curvature_peak are inverses, and vectorised", {
+  peaks <- c(0.5, 1, 2.5, 4, 10, 30)
+  expect_equal(ns_curvature_peak(ns_lambda(peaks)), peaks)
+  expect_equal(ns_lambda(ns_curvature_peak(peaks)), peaks)
+  expect_length(ns_lambda(peaks), length(peaks))
+
+  # Lambda is per unit of maturity, which is the whole point: the same curve
+  # shape in months and in years differs by the unit conversion.
+  expect_equal(ns_lambda(2.5) / ns_lambda(30), 12, tolerance = 1e-8)
+})
+
+test_that("ns_curvature_peak explains the package default", {
+  # 0.0609 is the Diebold-Li value for maturities in months, where it peaks
+  # just short of 30. The package measures maturities in years.
+  expect_equal(ns_curvature_peak(0.0609), 29.4, tolerance = 0.01)
+  expect_equal(ns_lambda(30), 0.0598, tolerance = 1e-3)
+
+  # The default of fit_ns_model() is that same number.
+  expect_equal(eval(formals(fit_ns_model)$initial_lambda), 0.0609)
+})
+
+test_that("ns_lambda rejects nonsense", {
+  expect_error(ns_lambda(-1), "peak_maturity")
+  expect_error(ns_lambda(NA_real_), "peak_maturity")
+  expect_error(ns_curvature_peak(numeric(0)), "lambda")
+})

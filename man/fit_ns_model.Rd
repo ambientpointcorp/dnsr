@@ -20,14 +20,27 @@ fit_ns_model(
 
 \item{yields}{Numeric vector. The yield values corresponding to the maturities.}
 
-\item{initial_lambda}{Numeric. Initial value for the decay parameter lambda.}
+\item{initial_lambda}{Numeric. Initial value for the decay parameter lambda,
+per unit of maturity, and the value used outright when
+\code{lambda_constraint = "fixed"}. Maturities here are in years, so the
+0.0609 default is the Diebold-Li value for maturities in months and places
+the curvature hump at 29.4 years rather than months; see
+\code{\link{ns_lambda}}.}
 
 \item{lambda_constraint}{Character. One of "fixed", "constrained", or "free":
 \itemize{
 \item "fixed": lambda is fixed at the initial_lambda value.
 \item "constrained": lambda is optimized within bounds.
 \item "free": lambda is optimized without constraints.
-}}
+}
+
+With \code{method = "optim"} the search over lambda is weak: L-BFGS-B's
+numerical gradient is poorly scaled when the betas are around 0.05 and
+lambda around 0.5, and in practice lambda moves very little from
+\code{initial_lambda} even when unconstrained. \code{method = "profile"}
+searches lambda properly and reaches the same optimum from any starting
+value, so prefer it when lambda is meant to be estimated rather than
+supplied.}
 
 \item{lower_bounds}{Numeric vector of length 4. Lower bounds for parameters (beta1, beta2, beta3, lambda).}
 

@@ -262,7 +262,10 @@ simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
 #'   (time, path, factor); if a matrix, factors for a single path indexed by
 #'   (time, factor).
 #' @param maturities Numeric vector. Maturities (in years) for the yield curve.
-#' @param lambda Numeric. DNS decay parameter lambda.
+#' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
+#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
+#'   value for maturities in months and places the curvature hump at 29.4
+#'   years rather than months; see \code{\link{ns_lambda}}.
 #'
 #' @return Array of yields indexed by (time, maturity, path) if \code{factors} is
 #'   an array, or a matrix indexed by (time, maturity) if it is a matrix.
@@ -359,7 +362,10 @@ calculate_dns_yields <- function(factors, maturities, lambda = 0.0609) {
 #' @param params List. Model parameters (kappa, theta, sigma).
 #' @param initial_factors Numeric vector. Initial factor values (beta1, beta2, beta3).
 #' @param maturities Numeric vector. Maturities (in years) for the yield curve.
-#' @param lambda Numeric. DNS decay parameter lambda.
+#' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
+#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
+#'   value for maturities in months and places the curvature hump at 29.4
+#'   years rather than months; see \code{\link{ns_lambda}}.
 #' @param time_horizon Numeric. Simulation time horizon in years.
 #' @param n_steps Integer. Number of time steps in the simulation.
 #' @param n_paths Integer. Number of simulation paths.
@@ -450,7 +456,10 @@ simulate_dns_yield_curves <- function(params, initial_factors, maturities,
 #'
 #' @param factors Matrix or array. DNS factors.
 #' @param maturities Numeric vector. Maturities (in years) for forward rates.
-#' @param lambda Numeric. DNS decay parameter lambda.
+#' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
+#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
+#'   value for maturities in months and places the curvature hump at 29.4
+#'   years rather than months; see \code{\link{ns_lambda}}.
 #'
 #' @return Matrix or array of forward rates with the same structure as the yield output
 #'   from calculate_dns_yields.

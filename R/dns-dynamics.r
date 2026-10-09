@@ -582,7 +582,9 @@ dns_dynamics_to_sim_params <- function(dynamics, include_correlation = TRUE,
 #' suitable for use in simulation or pricing applications.
 #'
 #' @param lookback_days Integer. Number of days to use for calibration.
-#' @param lambda Numeric. Fixed lambda value to use for calibration.
+#' @param lambda Numeric. Fixed lambda value to use for calibration. See
+#'   \code{\link{ns_lambda}} on its units; the 0.0609 fallback is a
+#'   month-denominated constant and maturities here are in years.
 #' @param start_date Date or character. Start date for the data window.
 #' @param end_date Date or character. End date for the data window.
 #' @param verbose Logical. If TRUE, print progress information.

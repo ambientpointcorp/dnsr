@@ -18,6 +18,7 @@ reference:
   - title: Cross-sectional fitting
     desc: Fit the Nelson-Siegel curve to one date, or to a panel of dates.
     contents:
+      - ns_lambda
       - fit_ns_model
       - fit_dns_model
       - compare_term_structure_models

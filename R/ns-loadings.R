@@ -159,3 +159,88 @@ fit_svensson <- function(maturities, yields,
     success = TRUE
   )
 }
+
+
+#' @title Choose the Nelson-Siegel Decay from the Curvature Peak
+#'
+#' @description
+#' Converts between the decay parameter lambda and the maturity at which the
+#' curvature loading peaks. \code{ns_lambda()} goes from a maturity to a
+#' lambda; \code{ns_curvature_peak()} goes back.
+#'
+#' @param peak_maturity Numeric. The maturity at which the curvature loading
+#'   should peak, in whatever units the maturities are measured in.
+#' @param lambda Numeric. A decay parameter, per unit of maturity.
+#'
+#' @return A numeric vector of the same length as the input:
+#'   \code{ns_lambda()} returns decays, \code{ns_curvature_peak()} maturities.
+#'
+#' @details
+#' The curvature loading
+#' \deqn{L_3(m) = \frac{1-e^{-\lambda m}}{\lambda m} - e^{-\lambda m}}
+#' is maximised where \eqn{\lambda m = 1.793282}, the root of
+#' \eqn{\partial L_3 / \partial m = 0}. So one defensible way to pick lambda is
+#' to decide where the hump belongs and divide.
+#'
+#' The point of doing it this way is units. Lambda is per unit of maturity, so
+#' its numerical value depends on whether maturities are years or months, and
+#' nothing about a lambda on its own says which. Stating a maturity instead
+#' settles it: \code{ns_lambda(30)} on a curve measured in months and
+#' \code{ns_lambda(2.5)} on the same curve measured in years describe the same
+#' shape.
+#'
+#' That also explains the package default of 0.0609, which is the value
+#' Diebold and Li published for maturities in \strong{months}, where it places
+#' the hump at 29.4 months. The functions in this package take maturities in
+#' \strong{years}, so the same number places it at 29.4 \emph{years};
+#' \code{ns_curvature_peak()} reports that directly.
+#'
+#' Two cautions. The peak is flat -- at half or double the nominal peak
+#' maturity the loading is still about 85 percent of its maximum -- so lambda
+#' is not tightly determined by this choice, and the apparent precision of the
+#' result is misleading. And lambda sets the slope loading's decay at the same
+#' time, which is often the more consequential effect: a hump at 2.5 years
+#' leaves the slope loading at 0.53 by two years, while a hump at 10 years
+#' leaves it at 0.84. Where lambda can be estimated rather than chosen, for
+#' instance with \code{fit_ns_model(method = "profile")}, estimating it is
+#' usually better. Fixing it is still the right move for a panel, where the
+#' factors have to be comparable across dates.
+#'
+#' @examples
+#' # A hump at two and a half years, for maturities measured in years
+#' ns_lambda(2.5)
+#'
+#' # Diebold and Li aimed for a hump at 30 months, measuring maturities in
+#' # months. That criterion gives 0.0598; the value they published, 0.0609,
+#' # peaks a little short of it.
+#' ns_lambda(30)
+#' ns_curvature_peak(0.0609)
+#'
+#' # What the package default implies when maturities are in years
+#' ns_curvature_peak(0.0609)
+#'
+#' # They are inverses
+#' ns_curvature_peak(ns_lambda(4))
+#'
+#' @seealso \code{\link{plot_dns_loadings}} to see the loadings a lambda
+#'   produces, and \code{\link{fit_ns_model}} to estimate one instead.
+#'
+#' @export
+ns_lambda <- function(peak_maturity) {
+  checkmate::assert_numeric(peak_maturity, lower = 0, any.missing = FALSE,
+                            min.len = 1)
+  NS_CURVATURE_PEAK_PRODUCT / peak_maturity
+}
+
+#' @rdname ns_lambda
+#' @export
+ns_curvature_peak <- function(lambda) {
+  checkmate::assert_numeric(lambda, lower = 0, any.missing = FALSE,
+                            min.len = 1)
+  NS_CURVATURE_PEAK_PRODUCT / lambda
+}
+
+# The product lambda * m at which the curvature loading is maximised: the root
+# of d/dm [ (1-exp(-lambda m))/(lambda m) - exp(-lambda m) ] = 0, which has no
+# closed form. Computed once to 6 figures rather than solved on every call.
+NS_CURVATURE_PEAK_PRODUCT <- 1.793282

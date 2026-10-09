@@ -1,3 +1,82 @@
+# dnsr 0.5.0
+
+Documentation, plus one additive pair of helpers. No existing function changes
+what it computes.
+
+## The lambda units, and why they matter more than they look
+
+`lambda` is measured per unit of maturity, and every function here takes
+maturities in **years**. The 0.0609 default is the value Diebold and Li
+published for maturities in **months**, where it places the curvature hump
+just short of 30 months. In years the same number places it at 29.4 -- off the
+end of most curves.
+
+That was documented nowhere, and the consequence is larger than a misplaced
+hump. At `lambda = 0.0609` the *slope* loading falls only from 0.992 at three
+months to 0.749 at ten years: nearly flat, and so nearly collinear with the
+level loading, which is 1 everywhere. The two factors stop being separately
+identified. Fitting the bundled panel both ways and comparing `beta2` against
+the 3-month minus 10-year spread the market quotes:
+
+| lambda | hump at | cor(beta2, 3m-10y) | same sign | median fit |
+| --: | --: | --: | --: | --: |
+| 0.0609 | 29.5 y | -0.929 | 5% | 23.0 bp |
+| 0.448 | 4.0 y | +0.941 | 90% | 5.3 bp |
+
+At the default the slope factor is anti-correlated with the slope and carries
+the right sign on one date in twenty.
+
+**The default is unchanged**, because changing it would alter every existing
+call, and because there is no single right value to substitute: 0.73
+reproduces the Diebold-Li criterion in year units, while this panel prefers
+about 0.45. What changes is that the units are now stated wherever lambda is
+documented, and there is a way to reason about it:
+
+* New `ns_lambda()` and `ns_curvature_peak()` convert between a decay and the
+  maturity at which its curvature loading peaks, which is the quantity a
+  reader can actually judge. `ns_lambda(2.5)` describes the same curve shape
+  whether maturities are years or months, because the caller states the
+  maturity in their own units. `ns_curvature_peak(0.0609)` reports 29.4, which
+  is how the mismatch becomes visible.
+
+  Documented with its two caveats: the peak is flat, so lambda is not tightly
+  determined by this choice, and lambda sets the slope loading's decay at the
+  same time, which is often the more consequential effect.
+
+* `fit_ns_model()`'s documentation now says that with `method = "optim"` the
+  search over lambda is weak -- L-BFGS-B's numerical gradient is poorly scaled
+  when the betas are near 0.05 and lambda near 0.5, and lambda moves very
+  little from its starting value even unconstrained -- while
+  `method = "profile"` searches it properly and reaches the same optimum from
+  any start.
+
+## Vignettes
+
+* The introduction now explains the lambda units with the measurement above,
+  fixes lambda at `ns_lambda(4)` for its panel work rather than at the
+  default, and gains three sections: whether the factors mean what they are
+  called (`beta2` against the quoted spread), where a three-factor curve runs
+  out (residuals by maturity, from 1.9 basis points in the middle to 9.4 at
+  the long end, with twenty years fitted low and thirty high), and a checklist
+  for deciding whether a fit is trustworthy that gathers `success_rate`,
+  `failures`, `at_bound`, `system_stability` and `half_life_ci` into one place.
+* A section on what the package does not do: it estimates in two steps rather
+  than as a state-space system with a Kalman filter, so the standard errors
+  describe the factor regressions and not the factors' own measurement error;
+  and it carries no arbitrage-free restriction, which matters if curves are
+  being used to price derivatives rather than discount cashflows.
+* `README.md` tabulates the whole exported surface, not just the plots.
+  `dns_zero_prices()` had appeared nowhere in it.
+
+## Removed
+
+* `dnsr-package-summary.Rmd`, which carried vignette metadata but sat in the
+  repository root, was `.Rbuildignore`d, and was therefore never built,
+  shipped or checked. It duplicated `README.md` and had rotted unnoticed --
+  it still documented `animate_yield_curves()`, removed long ago, and listed
+  none of the functions added since. The only thing referencing it was a stale
+  local `docs/` build.
+
 # dnsr 0.4.3
 
 * `fit_dns_model()` gains `lower_bounds` and `upper_bounds`, forwarded to
