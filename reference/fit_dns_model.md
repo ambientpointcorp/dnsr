@@ -15,7 +15,9 @@ fit_dns_model(
   date_order = c("input", "ascending", "descending"),
   drop_failed = TRUE,
   warm_start = TRUE,
-  method = c("optim", "profile")
+  method = c("optim", "profile"),
+  lower_bounds = NULL,
+  upper_bounds = NULL
 )
 ```
 
@@ -83,6 +85,22 @@ fit_dns_model(
   [`fit_ns_model`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md):
   `"optim"` (the default) or `"profile"`.
 
+- lower_bounds, upper_bounds:
+
+  Numeric vectors of length 4, passed to
+  [`fit_ns_model`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
+  as the bounds on `(beta1, beta2, beta3, lambda)`. `NULL`, the default,
+  leaves that function's own defaults in force, including its widening
+  of the beta box to the data scale – which it only applies when both
+  bounds are left alone.
+
+  Supply them when the `at_bound` report says a fit is clamped. The
+  default ceiling on lambda is 0.5, and real Treasury curves reach it:
+  on the panel in
+  [`treasury_yields`](https://ambientpointcorp.github.io/dnsr/reference/treasury_yields.md)
+  a freely estimated lambda rests there on roughly a quarter of dates.
+  Without these arguments there was no way to act on that from here.
+
 ## Value
 
 A list containing:
@@ -120,7 +138,7 @@ data(treasury_yields)
 # The 60 most recent curves. The window is chosen by date, so passing the
 # panel in either row order selects the same dates.
 dns_result <- fit_dns_model(treasury_yields, n_days = 60, show_progress = FALSE)
-#> Warning: Parameters rest on a bound in some fits: lambda on 38 (of 60 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, widen lower_bounds/upper_bounds, or check the yield scale.
+#> Warning: Parameters rest on a bound in some fits: lambda on 38 (of 60 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, pass wider lower_bounds/upper_bounds, or check the yield scale.
 dns_result
 #> Dynamic Nelson-Siegel fit
 #>   60 curves, 2024-10-03 to 2024-12-31

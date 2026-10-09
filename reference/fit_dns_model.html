@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,7 +55,9 @@
 <span>  date_order <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"input"</span>, <span class="st">"ascending"</span>, <span class="st">"descending"</span><span class="op">)</span>,</span>
 <span>  drop_failed <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  warm_start <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"optim"</span>, <span class="st">"profile"</span><span class="op">)</span></span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"optim"</span>, <span class="st">"profile"</span><span class="op">)</span>,</span>
+<span>  lower_bounds <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  upper_bounds <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -122,6 +124,20 @@ panel they arrived in.</p></dd>
 <dd><p>Character. Passed to <code><a href="fit_ns_model.html">fit_ns_model</a></code>:
 <code>"optim"</code> (the default) or <code>"profile"</code>.</p></dd>
 
+
+<dt id="arg-lower-bounds-upper-bounds">lower_bounds, upper_bounds<a class="anchor" aria-label="anchor" href="#arg-lower-bounds-upper-bounds"></a></dt>
+<dd><p>Numeric vectors of length 4, passed to
+<code><a href="fit_ns_model.html">fit_ns_model</a></code> as the bounds on
+<code>(beta1, beta2, beta3, lambda)</code>. <code>NULL</code>, the default, leaves
+that function's own defaults in force, including its widening of the beta
+box to the data scale – which it only applies when both bounds are left
+alone.</p>
+<p>Supply them when the <code>at_bound</code> report says a fit is clamped. The
+default ceiling on lambda is 0.5, and real Treasury curves reach it: on
+the panel in <code><a href="treasury_yields.html">treasury_yields</a></code> a freely estimated lambda
+rests there on roughly a quarter of dates. Without these arguments there
+was no way to act on that from here.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -151,7 +167,7 @@ they can be fed directly to <code><a href="estimate_dns_dynamics.html">estimate_
 <span class="r-in"><span><span class="co"># The 60 most recent curves. The window is chosen by date, so passing the</span></span></span>
 <span class="r-in"><span><span class="co"># panel in either row order selects the same dates.</span></span></span>
 <span class="r-in"><span><span class="va">dns_result</span> <span class="op">&lt;-</span> <span class="fu">fit_dns_model</span><span class="op">(</span><span class="va">treasury_yields</span>, n_days <span class="op">=</span> <span class="fl">60</span>, show_progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
-<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Parameters rest on a bound in some fits: lambda on 38 (of 60 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, widen lower_bounds/upper_bounds, or check the yield scale.</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Parameters rest on a bound in some fits: lambda on 38 (of 60 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, pass wider lower_bounds/upper_bounds, or check the yield scale.</span>
 <span class="r-in"><span><span class="va">dns_result</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Dynamic Nelson-Siegel fit</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   60 curves, 2024-10-03 to 2024-12-31</span>

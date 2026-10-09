@@ -53,7 +53,7 @@ month_ends <- treasury_yields[
 ]
 dns_result <- fit_dns_model(month_ends, n_days = nrow(month_ends),
                             show_progress = FALSE, warm_start = FALSE)
-#> Warning: Parameters rest on a bound in some fits: lambda on 13 (of 72 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, widen lower_bounds/upper_bounds, or check the yield scale.
+#> Warning: Parameters rest on a bound in some fits: lambda on 13 (of 72 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, pass wider lower_bounds/upper_bounds, or check the yield scale.
 dynamics <- estimate_dns_dynamics(dns_result$parameters)
 
 # Pass the fitted lambda through, rather than leaving the 0.0609 default

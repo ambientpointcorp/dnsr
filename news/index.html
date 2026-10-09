@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,13 @@
       <small>Source: <a href="https://github.com/ambientpointcorp/dnsr/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.3" id="dnsr-043">dnsr 0.4.3<a class="anchor" aria-label="anchor" href="#dnsr-043"></a></h2>
+<ul><li>
+<p><code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> gains <code>lower_bounds</code> and <code>upper_bounds</code>, forwarded to <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code>. The panel fitter reports clamped fits in <code>at_bound</code> and warns about them, but had no argument through which to do anything about it: widening the box meant abandoning <code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> and looping <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> by hand. On the bundled <code>treasury_yields</code> month-ends a freely estimated lambda rests on its default ceiling of 0.5 on 13 of 72 dates; passing wider bounds clears all 13 and improves the median fit.</p>
+<p>Both default to <code>NULL</code> rather than to <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code>’s own numeric defaults, and are forwarded only when supplied. That is deliberate: <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> decides whether to widen its beta box to the data scale by asking whether both bounds are <code><a href="https://rdrr.io/r/base/missing.html" class="external-link">missing()</a></code>, so passing its defaults through explicitly would have switched that off and reintroduced the clamping on percentage-point yields that 0.4.0 fixed. Both behaviours are tested.</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.2" id="dnsr-042">dnsr 0.4.2<a class="anchor" aria-label="anchor" href="#dnsr-042"></a></h2>
 <p>The vignettes, which had been left at 0.1.0-era content while everything else moved, plus one defect they surfaced.</p>

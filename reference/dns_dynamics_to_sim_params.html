@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,7 +91,7 @@ through as <code>kappa_matrix</code> for inspection.</p>
 <span class="r-in"><span><span class="op">]</span></span></span>
 <span class="r-in"><span><span class="va">dns_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="fit_dns_model.html">fit_dns_model</a></span><span class="op">(</span><span class="va">month_ends</span>, n_days <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">month_ends</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>                            show_progress <span class="op">=</span> <span class="cn">FALSE</span>, warm_start <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
-<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Parameters rest on a bound in some fits: lambda on 13 (of 72 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, widen lower_bounds/upper_bounds, or check the yield scale.</span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Parameters rest on a bound in some fits: lambda on 13 (of 72 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, pass wider lower_bounds/upper_bounds, or check the yield scale.</span>
 <span class="r-in"><span><span class="va">dynamics</span> <span class="op">&lt;-</span> <span class="fu"><a href="estimate_dns_dynamics.html">estimate_dns_dynamics</a></span><span class="op">(</span><span class="va">dns_result</span><span class="op">$</span><span class="va">parameters</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Pass the fitted lambda through, rather than leaving the 0.0609 default</span></span></span>
