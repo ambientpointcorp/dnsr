@@ -4,7 +4,7 @@
 \alias{calculate_dns_forwards}
 \title{Calculate Forward Rates from DNS Factors}
 \usage{
-calculate_dns_forwards(factors, maturities, lambda = 0.0609)
+calculate_dns_forwards(factors, maturities, lambda = ns_lambda(3.5))
 }
 \arguments{
 \item{factors}{Matrix or array. DNS factors.}
@@ -12,9 +12,11 @@ calculate_dns_forwards(factors, maturities, lambda = 0.0609)
 \item{maturities}{Numeric vector. Maturities (in years) for forward rates.}
 
 \item{lambda}{Numeric. DNS decay parameter lambda, per unit of maturity.
-Maturities here are in years, so the 0.0609 default is the Diebold-Li
-value for maturities in months and places the curvature hump at 29.4
-years rather than months; see \code{\link{ns_lambda}}.}
+Maturities here are in years, and the default places the curvature hump at
+3.5 years, near the middle of a Treasury curve. It is written as
+\code{ns_lambda(3.5)} so the number states its own meaning; see
+\code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+constant and in years would place that hump at 29.4 years.}
 }
 \value{
 Matrix or array of forward rates with the same structure as the yield output
@@ -33,8 +35,8 @@ factors <- matrix(c(0.035, -0.015, 0.005), nrow = 1)
 
 # Forwards sit above spots where the curve is rising
 rbind(
-  spot = calculate_dns_yields(factors, maturities, 0.0609)[1, ],
-  forward = calculate_dns_forwards(factors, maturities, 0.0609)[1, ]
+  spot = calculate_dns_yields(factors, maturities, ns_lambda(3.5))[1, ],
+  forward = calculate_dns_forwards(factors, maturities, ns_lambda(3.5))[1, ]
 )
 
 }

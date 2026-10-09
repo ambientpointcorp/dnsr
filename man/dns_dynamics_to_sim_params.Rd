@@ -13,7 +13,8 @@ dns_dynamics_to_sim_params(dynamics, include_correlation = TRUE, lambda = NULL)
 
 \item{lambda}{Numeric. The Nelson-Siegel decay parameter to carry into the
 simulation parameters. If NULL (the default) it is taken from
-\code{dynamics$lambda} when present, and otherwise falls back to 0.0609.
+\code{dynamics$lambda} when present, and otherwise falls back to
+\code{ns_lambda(3.5)}.
 \code{estimate_dns_dynamics()} does not estimate lambda, so pass the value
 fitted by \code{\link{fit_dns_model}} to avoid simulating off the default.}
 }
@@ -41,7 +42,7 @@ dns_result <- fit_dns_model(month_ends, n_days = nrow(month_ends),
                             show_progress = FALSE, warm_start = FALSE)
 dynamics <- estimate_dns_dynamics(dns_result$parameters)
 
-# Pass the fitted lambda through, rather than leaving the 0.0609 default
+# Pass the fitted lambda through, rather than leaving the default
 latest <- dns_result$parameters[which.max(dns_result$parameters$Date), ]
 sim_params <- dns_dynamics_to_sim_params(dynamics, lambda = latest$lambda)
 str(sim_params)

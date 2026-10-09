@@ -263,9 +263,11 @@ simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
 #'   (time, factor).
 #' @param maturities Numeric vector. Maturities (in years) for the yield curve.
 #' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
-#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
-#'   value for maturities in months and places the curvature hump at 29.4
-#'   years rather than months; see \code{\link{ns_lambda}}.
+#'   Maturities here are in years, and the default places the curvature hump at
+#'   3.5 years, near the middle of a Treasury curve. It is written as
+#'   \code{ns_lambda(3.5)} so the number states its own meaning; see
+#'   \code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+#'   constant and in years would place that hump at 29.4 years.
 #'
 #' @return Array of yields indexed by (time, maturity, path) if \code{factors} is
 #'   an array, or a matrix indexed by (time, maturity) if it is a matrix.
@@ -275,14 +277,15 @@ simulate_dns_factors <- function(params, initial_factors, time_horizon = 10,
 #'
 #' # A single curve: one row of (level, slope, curvature)
 #' factors <- matrix(c(0.035, -0.015, 0.005), nrow = 1)
-#' round(calculate_dns_yields(factors, maturities, 0.0609)[1, ], 5)
+#' round(calculate_dns_yields(factors, maturities, ns_lambda(3.5))[1, ], 5)
 #'
 #' # Three paths over four dates, as returned by simulate_dns_factors()
 #' paths <- array(rep(c(0.035, -0.015, 0.005), each = 12), dim = c(4, 3, 3))
-#' dim(calculate_dns_yields(paths, maturities, 0.0609))
+#' dim(calculate_dns_yields(paths, maturities, ns_lambda(3.5)))
 #'
 #' @export
-calculate_dns_yields <- function(factors, maturities, lambda = 0.0609) {
+calculate_dns_yields <- function(factors, maturities,
+                                 lambda = ns_lambda(3.5)) {
   # Parameter validation
   checkmate::assert_numeric(lambda, lower = 0, len = 1)
   checkmate::assert_numeric(maturities, lower = 0)
@@ -363,9 +366,11 @@ calculate_dns_yields <- function(factors, maturities, lambda = 0.0609) {
 #' @param initial_factors Numeric vector. Initial factor values (beta1, beta2, beta3).
 #' @param maturities Numeric vector. Maturities (in years) for the yield curve.
 #' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
-#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
-#'   value for maturities in months and places the curvature hump at 29.4
-#'   years rather than months; see \code{\link{ns_lambda}}.
+#'   Maturities here are in years, and the default places the curvature hump at
+#'   3.5 years, near the middle of a Treasury curve. It is written as
+#'   \code{ns_lambda(3.5)} so the number states its own meaning; see
+#'   \code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+#'   constant and in years would place that hump at 29.4 years.
 #' @param time_horizon Numeric. Simulation time horizon in years.
 #' @param n_steps Integer. Number of time steps in the simulation.
 #' @param n_paths Integer. Number of simulation paths.
@@ -399,7 +404,7 @@ calculate_dns_yields <- function(factors, maturities, lambda = 0.0609) {
 #'
 #' @export
 simulate_dns_yield_curves <- function(params, initial_factors, maturities,
-                                      lambda = 0.0609, time_horizon = 10,
+                                      lambda = ns_lambda(3.5), time_horizon = 10,
                                       n_steps = 120, n_paths = 100,
                                       include_correlation = TRUE,
                                       sim_method = "euler", seed = NULL,
@@ -457,9 +462,11 @@ simulate_dns_yield_curves <- function(params, initial_factors, maturities,
 #' @param factors Matrix or array. DNS factors.
 #' @param maturities Numeric vector. Maturities (in years) for forward rates.
 #' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
-#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
-#'   value for maturities in months and places the curvature hump at 29.4
-#'   years rather than months; see \code{\link{ns_lambda}}.
+#'   Maturities here are in years, and the default places the curvature hump at
+#'   3.5 years, near the middle of a Treasury curve. It is written as
+#'   \code{ns_lambda(3.5)} so the number states its own meaning; see
+#'   \code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+#'   constant and in years would place that hump at 29.4 years.
 #'
 #' @return Matrix or array of forward rates with the same structure as the yield output
 #'   from calculate_dns_yields.
@@ -474,12 +481,13 @@ simulate_dns_yield_curves <- function(params, initial_factors, maturities,
 #'
 #' # Forwards sit above spots where the curve is rising
 #' rbind(
-#'   spot = calculate_dns_yields(factors, maturities, 0.0609)[1, ],
-#'   forward = calculate_dns_forwards(factors, maturities, 0.0609)[1, ]
+#'   spot = calculate_dns_yields(factors, maturities, ns_lambda(3.5))[1, ],
+#'   forward = calculate_dns_forwards(factors, maturities, ns_lambda(3.5))[1, ]
 #' )
 #'
 #' @export
-calculate_dns_forwards <- function(factors, maturities, lambda = 0.0609) {
+calculate_dns_forwards <- function(factors, maturities,
+                                   lambda = ns_lambda(3.5)) {
   # Parameter validation
   checkmate::assert_numeric(lambda, lower = 0, len = 1)
   checkmate::assert_numeric(maturities, lower = 0)

@@ -4,7 +4,7 @@
 \alias{calculate_dns_yields}
 \title{Calculate Yield Curves from DNS Factors}
 \usage{
-calculate_dns_yields(factors, maturities, lambda = 0.0609)
+calculate_dns_yields(factors, maturities, lambda = ns_lambda(3.5))
 }
 \arguments{
 \item{factors}{Array or matrix. If an array, simulated factors indexed by
@@ -14,9 +14,11 @@ calculate_dns_yields(factors, maturities, lambda = 0.0609)
 \item{maturities}{Numeric vector. Maturities (in years) for the yield curve.}
 
 \item{lambda}{Numeric. DNS decay parameter lambda, per unit of maturity.
-Maturities here are in years, so the 0.0609 default is the Diebold-Li
-value for maturities in months and places the curvature hump at 29.4
-years rather than months; see \code{\link{ns_lambda}}.}
+Maturities here are in years, and the default places the curvature hump at
+3.5 years, near the middle of a Treasury curve. It is written as
+\code{ns_lambda(3.5)} so the number states its own meaning; see
+\code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+constant and in years would place that hump at 29.4 years.}
 }
 \value{
 Array of yields indexed by (time, maturity, path) if \code{factors} is
@@ -30,10 +32,10 @@ maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
 
 # A single curve: one row of (level, slope, curvature)
 factors <- matrix(c(0.035, -0.015, 0.005), nrow = 1)
-round(calculate_dns_yields(factors, maturities, 0.0609)[1, ], 5)
+round(calculate_dns_yields(factors, maturities, ns_lambda(3.5))[1, ], 5)
 
 # Three paths over four dates, as returned by simulate_dns_factors()
 paths <- array(rep(c(0.035, -0.015, 0.005), each = 12), dim = c(4, 3, 3))
-dim(calculate_dns_yields(paths, maturities, 0.0609))
+dim(calculate_dns_yields(paths, maturities, ns_lambda(3.5)))
 
 }

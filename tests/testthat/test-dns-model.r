@@ -96,17 +96,27 @@ test_that("fit_ns_model handles extreme yield curves gracefully", {
   # inverted curve (short above long) needs beta2 > 0.
   expect_gt(result$parameters["beta2"], 0)
   
-  # Create another extreme case - humped yield curve. This hump is sharp enough
-  # that the fit wants a faster decay than the default lambda ceiling of 0.5
-  # allows, so it comes to rest there. L-BFGS-B reports convergence at a bound,
-  # so the fit says so explicitly instead of returning an unqualified success.
+  # Create another extreme case - humped yield curve. The hump is sharp enough
+  # to need a faster decay than the old ceiling of 0.5 allowed; the ceiling of
+  # 2 contains it, so this now resolves to an interior optimum.
   yields_humped <- c(0.01, 0.015, 0.02, 0.025, 0.028, 0.026, 0.024, 0.023, 0.022, 0.021)
   
   # Fit Nelson-Siegel model
-  expect_warning(result_humped <- fit_ns_model(maturities, yields_humped),
-                 "rests on a parameter bound")
-  expect_true(result_humped$at_bound[["lambda"]])
-  expect_equal(unname(result_humped$parameters["lambda"]), 0.5)
+  result_humped <- fit_ns_model(maturities, yields_humped)
+  expect_false(any(result_humped$at_bound))
+  expect_gt(unname(result_humped$parameters["lambda"]), 0.5)
+  expect_lt(unname(result_humped$parameters["lambda"]), 2)
+
+  # Imposing the old ceiling brings the clamp back, which is the behaviour
+  # worth pinning: L-BFGS-B reports convergence at a bound, so the fit says so
+  # explicitly rather than returning an unqualified success.
+  expect_warning(
+    pinched <- fit_ns_model(maturities, yields_humped,
+                            upper_bounds = c(0.2, 0.5, 0.5, 0.5)),
+    "rests on a parameter bound"
+  )
+  expect_true(pinched$at_bound[["lambda"]])
+  expect_equal(unname(pinched$parameters["lambda"]), 0.5)
   
   # Check parameters - beta3 should be non-zero for humped curve
   expect_true(abs(result_humped$parameters["beta3"]) > 0.005)

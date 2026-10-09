@@ -609,7 +609,7 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
     forwards <- calculate_dns_forwards(
       factors = sim_result$factors,
       maturities = maturities,
-      lambda = if ("lambda" %in% names(sim_result)) sim_result$lambda else 0.0609
+      lambda = if ("lambda" %in% names(sim_result)) sim_result$lambda else ns_lambda(3.5)
     )
 
     # Prepare data, on the same grid as the yield panel above
@@ -654,9 +654,11 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
 #'
 #' @param maturities Numeric vector. Maturities (in years) for which to calculate loadings.
 #' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
-#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
-#'   value for maturities in months and places the curvature hump at 29.4
-#'   years rather than months; see \code{\link{ns_lambda}}.
+#'   Maturities here are in years, and the default places the curvature hump at
+#'   3.5 years, near the middle of a Treasury curve. It is written as
+#'   \code{ns_lambda(3.5)} so the number states its own meaning; see
+#'   \code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+#'   constant and in years would place that hump at 29.4 years.
 #' @param show_labels Logical. If TRUE, add labels to the plot.
 #'
 #' @return A ggplot object with the factor loadings plot.
@@ -669,7 +671,7 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
 #'
 #' @export
 plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
-                              lambda = 0.0609, show_labels = TRUE) {
+                              lambda = ns_lambda(3.5), show_labels = TRUE) {
   # Parameter validation
   checkmate::assert_numeric(maturities, lower = 0)
   checkmate::assert_numeric(lambda, lower = 0, len = 1)
@@ -1271,6 +1273,16 @@ plot_yield_pca <- function(yield_data, n_components = 3,
 #'   maturities. "SmithWilson" needs the \pkg{SmithWilsonYieldCurve} package
 #'   and is an interpolation rather than a fit; see Details.
 #' @param spline_df Integer. Degrees of freedom for spline model.
+#' @param initial_lambda,method Passed to \code{\link{fit_ns_model}} for the
+#'   "NS" row. They are exposed because the Nelson-Siegel row is the only one
+#'   whose fit depends on a search, and so the only one that can be
+#'   misrepresented by a weak one: before 0.6.0 this table reported 8.87 bp for
+#'   Nelson-Siegel on the bundled panel, behind the cubic spline's 5.56, purely
+#'   because of the lambda default and the stopping rule. It now reports 4.43,
+#'   ahead of the spline. Passing \code{initial_lambda = 0.0609,
+#'   method = "optim"} restores the old configuration, which reports 8.57 --
+#'   near the old row but not identical to it, because the objective is now
+#'   scaled and the search therefore stops in a different place.
 #' @param ufr Numeric. Ultimate forward rate for the Smith-Wilson curve, which
 #'   its extrapolation converges to beyond the last observed maturity. Defaults
 #'   to the longest observed yield.
@@ -1329,7 +1341,9 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
                                           models = c("NS", "NSS", "Spline"),
                                           spline_df = 5,
                                           units = c("bp", "decimal"),
-                                          ufr = NULL, alpha = 0.1) {
+                                          ufr = NULL, alpha = 0.1,
+                                          initial_lambda = ns_lambda(3.5),
+                                          method = c("profile", "optim")) {
   # Parameter validation
   units <- match.arg(units)
   checkmate::assert_data_frame(yield_data)
@@ -1403,7 +1417,9 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
 
   # Fit Nelson-Siegel model if requested
   if ("NS" %in% models) {
-    ns_result <- fit_ns_model(maturities, yields)
+    ns_result <- fit_ns_model(maturities, yields,
+                              initial_lambda = initial_lambda,
+                              method = method)
 
     # fit_ns_model() drops points it could not use, so place the fitted values
     # back onto the full maturity grid by index.

@@ -17,8 +17,8 @@ get_calibrated_dns_params(
 \item{lookback_days}{Integer. Number of days to use for calibration.}
 
 \item{lambda}{Numeric. Fixed lambda value to use for calibration. See
-\code{\link{ns_lambda}} on its units; the 0.0609 fallback is a
-month-denominated constant and maturities here are in years.}
+\code{\link{ns_lambda}} on its units. The fallback places the curvature
+hump at 3.5 years, and maturities here are in years.}
 
 \item{start_date}{Date or character. Start date for the data window.}
 

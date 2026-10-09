@@ -76,8 +76,8 @@ years or months, and nothing about a $\lambda$ on its own tells you which.
 
 This is worth labouring because the conventional value is a trap. Diebold and
 Li chose $\lambda = 0.0609$ working in *months*, where it places the curvature
-hump just short of 30 months. That is the number this package uses as a
-default, and in years it means something quite different:
+hump just short of 30 months. Quoted against maturities in years it means
+something quite different:
 
 ```{r lambda_units}
 ns_curvature_peak(0.0609)   # where the hump sits, in the maturity's own units
@@ -94,7 +94,9 @@ ns_lambda(30)    # the Diebold-Li criterion, in the months they worked in
 ```
 
 So the honest reading of `0.0609` is that it is right for month-denominated
-maturities and merely conventional here. Compare the two:
+maturities and simply wrong here, which is why this package's default is
+`ns_lambda(3.5)` -- a hump at three and a half years, near the middle of a
+Treasury curve. Compare the two:
 
 ```{r loadings}
 plot_dns_loadings(lambda = 0.0609)
@@ -116,13 +118,12 @@ spread the market quotes:
 
 | $\lambda$ | hump at | cor($\beta_2$, 3m-10y) | same sign | median fit |
 | --: | --: | --: | --: | --: |
-| 0.0609 | 29.5 y | **-0.929** | **5%** | 23.0 bp |
+| 0.0609 | 29.4 y | **-0.928** | **5%** | 23.0 bp |
 | 0.448 | 4.0 y | **+0.941** | **90%** | 5.3 bp |
 
-At the default the slope factor is *anti*-correlated with the slope, and
-carries the right sign on one date in twenty. That is the cost of the unit
-mismatch, and it is why the rest of this vignette fixes $\lambda$ somewhere
-sensible rather than at the default.
+At the month-denominated value the slope factor is *anti*-correlated with the
+slope, and carries the right sign on one date in twenty. That is the cost of
+the unit mismatch, and it is why `dnsr` does not use 0.0609 as its default.
 
 Two cautions before leaning on `ns_lambda()`. The peak is flat -- at half or
 double the nominal peak maturity the curvature loading is still about 85
@@ -147,38 +148,40 @@ estimate of how the resulting factors move.
 
 ## Fitting a Single Curve
 
-`fit_ns_model()` fits one cross-section. The `"profile"` method solves the
-three betas in closed form at each $\lambda$ and searches only over $\lambda$,
-so it needs no starting values:
+`fit_ns_model()` fits one cross-section. The default `"profile"` method solves
+the three betas in closed form at each $\lambda$ and searches only over
+$\lambda$, so it needs no starting values for them:
 
 ```{r fit_one}
 maturities <- as.numeric(setdiff(names(treasury_yields), "Date"))
 latest <- as.numeric(treasury_yields[nrow(treasury_yields), -1])
 
-curve <- fit_ns_model(maturities, latest, method = "profile")
+curve <- fit_ns_model(maturities, latest)
 curve
 ```
 
-That warning is worth taking seriously rather than silencing. The fit reports
-any parameter that came to rest on one of its bounds, because a clamped fit can
-still look respectable on RMSE while the factor decomposition means nothing,
-and `L-BFGS-B` reports convergence at a bound, so `success` alone cannot tell
-you.
+The fit also reports whether any parameter came to rest on one of its bounds,
+which is worth checking rather than assuming. A clamped fit can still look
+respectable on RMSE while the factor decomposition means nothing, and a bounded
+optimiser reports convergence at a bound, so `success` alone cannot tell you:
 
 ```{r fit_one_bounds}
 curve$at_bound
 ```
 
-Here the default ceiling on $\lambda$, 0.5, is genuinely binding: this curve
-wants a faster decay than the conventional value allows. Given room, it finds
-an interior optimum and fits better:
+Nothing is clamped here. It is easy to arrange that it is, and the point is
+worth seeing, because this is exactly what the old ceiling of 0.5 did to this
+curve -- it wants a faster decay than that allowed:
 
-```{r fit_one_wide}
-wider <- fit_ns_model(maturities, latest, method = "profile",
-                      lower_bounds = c(-1, -1, -1, 0.01),
-                      upper_bounds = c(1, 1, 1, 5))
-c(lambda = wider$parameters[["lambda"]], rmse_bp = wider$rmse * 10000)
+```{r fit_one_pinched}
+pinched <- fit_ns_model(maturities, latest,
+                        upper_bounds = c(0.2, 0.5, 0.5, 0.5))
+c(lambda = pinched$parameters[["lambda"]], rmse_bp = pinched$rmse * 10000)
+pinched$at_bound
 ```
+
+The clamped fit reports $\lambda$ sitting exactly on 0.5 and a worse error, and
+says so through `at_bound` instead of presenting it as an unqualified success.
 
 ## Fitting the Panel
 
@@ -187,15 +190,16 @@ not matter which row order the panel arrives in.
 
 For a panel there is a choice to make that does not arise for a single curve.
 If $\lambda$ is estimated freely it varies from date to date -- on this data
-from 0.04 to 0.50 -- and then $\beta_2$ on one date does not mean the same
-thing as $\beta_2$ on the next, because the loading it multiplies has changed
-shape. The betas stop being a comparable time series, which is precisely what
-the next step needs them to be.
+from 0.17 to 2.00, the ceiling -- and then $\beta_2$ on one date does not mean
+the same thing as $\beta_2$ on the next, because the loading it multiplies has
+changed shape. The betas stop being a comparable time series, which is
+precisely what the next step needs them to be.
 
 Standard DNS practice, following Diebold and Li, therefore fixes $\lambda$ at a
-single value for the whole panel. It costs cross-sectional fit -- about 14
-basis points median here against 7 with $\lambda$ free -- and buys factors that
-can be modelled over time.
+single value for the whole panel. It costs cross-sectional fit -- about 6.4
+basis points median here against 4.5 with $\lambda$ free -- and buys factors
+that can be modelled over time. The size of that trade is worth noting: a
+couple of basis points of fit for factors that are comparable across dates.
 
 `ns_lambda(4)` puts the curvature hump at four years, which is about where
 this panel wants it, and keeps the loadings distinct enough for the factors to

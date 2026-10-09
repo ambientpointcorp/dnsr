@@ -194,14 +194,17 @@ where:
 `λ` is measured *per unit of maturity*, and every function here takes
 maturities in **years**. The conventional 0.0609 comes from Diebold and Li,
 who worked in **months**, where it places the curvature hump just short of 30
-months; in years the same number puts it at 29.4. It remains this package's
-default for continuity, but `ns_lambda()` and `ns_curvature_peak()` convert
-between a decay and the maturity its hump sits at, so the choice can be stated
-in terms you can check:
+months; in years the same number puts it at 29.4, off the end of most curves,
+where the slope loading is nearly parallel to the level loading and the two
+factors are not separately identified. Since 0.6.0 the default is therefore
+`ns_lambda(3.5)`, a hump at three and a half years. `ns_lambda()` and
+`ns_curvature_peak()` convert between a decay and the maturity its hump sits
+at, so the choice can be stated in terms you can check:
 
 ```r
 ns_curvature_peak(0.0609)   # 29.4 -- in years, the hump is off the curve
 ns_lambda(2.5)              # 0.717 -- a hump at two and a half years
+ns_lambda(3.5)              # 0.512 -- the package default
 ```
 
 In the dynamic extension, the factors $\beta_1$, $\beta_2$, and $\beta_3$ are modeled as mean-reverting Ornstein-Uhlenbeck processes:

@@ -9,12 +9,12 @@ fit_dns_model(
   n_days = 60,
   parallel = FALSE,
   lambda_constraint = "constrained",
-  initial_lambda = 0.0609,
+  initial_lambda = ns_lambda(3.5),
   show_progress = TRUE,
   date_order = c("input", "ascending", "descending"),
   drop_failed = TRUE,
   warm_start = TRUE,
-  method = c("optim", "profile"),
+  method = c("profile", "optim"),
   lower_bounds = NULL,
   upper_bounds = NULL
 )
@@ -33,9 +33,8 @@ The window is selected by date, so it does not depend on the row order of
 \item{lambda_constraint}{Character. How to handle the lambda parameter (fixed, constrained, free).}
 
 \item{initial_lambda}{Numeric. Initial value for lambda, passed to
-\code{\link{fit_ns_model}}. See \code{\link{ns_lambda}} on its units: the
-0.0609 default is a month-denominated constant and maturities here are in
-years.}
+\code{\link{fit_ns_model}}. The default places the curvature hump at 3.5
+years; see \code{\link{ns_lambda}} on its units.}
 
 \item{show_progress}{Logical. If TRUE, display a progress bar.}
 
@@ -62,7 +61,7 @@ the shared dates, because the chain of start values differs. Set
 panel they arrived in.}
 
 \item{method}{Character. Passed to \code{\link{fit_ns_model}}:
-\code{"optim"} (the default) or \code{"profile"}.}
+\code{"profile"} (the default) or \code{"optim"}.}
 
 \item{lower_bounds, upper_bounds}{Numeric vectors of length 4, passed to
 \code{\link{fit_ns_model}} as the bounds on

@@ -189,11 +189,14 @@ fit_svensson <- function(maturities, yields,
 #' \code{ns_lambda(2.5)} on the same curve measured in years describe the same
 #' shape.
 #'
-#' That also explains the package default of 0.0609, which is the value
-#' Diebold and Li published for maturities in \strong{months}, where it places
-#' the hump at 29.4 months. The functions in this package take maturities in
-#' \strong{years}, so the same number places it at 29.4 \emph{years};
-#' \code{ns_curvature_peak()} reports that directly.
+#' That also explains why this package does not use Diebold and Li's 0.0609 as
+#' its default. That is the value they published for maturities in
+#' \strong{months}, where it places the hump at 29.4 months. The functions here
+#' take maturities in \strong{years}, so the same number places it at 29.4
+#' \emph{years} -- off the end of most curves, where the slope loading is
+#' nearly parallel to the level loading and the two factors are not separately
+#' identified. \code{ns_curvature_peak()} reports that directly, and the
+#' package default is written as \code{ns_lambda(3.5)} instead.
 #'
 #' Two cautions. The peak is flat -- at half or double the nominal peak
 #' maturity the loading is still about 85 percent of its maximum -- so lambda
@@ -244,3 +247,8 @@ ns_curvature_peak <- function(lambda) {
 # of d/dm [ (1-exp(-lambda m))/(lambda m) - exp(-lambda m) ] = 0, which has no
 # closed form. Computed once to 6 figures rather than solved on every call.
 NS_CURVATURE_PEAK_PRODUCT <- 1.793282
+
+# Points in the log-spaced lambda scan that method = "profile" runs before it
+# refines. Enough that no basin of the profiled objective is stepped over on a
+# plausible interval, and cheap: each point costs one QR of an n-by-3 matrix.
+PROFILE_GRID_N <- 96L
