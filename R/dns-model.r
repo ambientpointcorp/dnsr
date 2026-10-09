@@ -13,11 +13,24 @@
 #'
 #' @param maturities Numeric vector. The maturities (in years) for the yield curve points.
 #' @param yields Numeric vector. The yield values corresponding to the maturities.
-#' @param initial_lambda Numeric. Initial value for the decay parameter lambda.
+#' @param initial_lambda Numeric. Initial value for the decay parameter lambda,
+#'   per unit of maturity, and the value used outright when
+#'   \code{lambda_constraint = "fixed"}. Maturities here are in years, so the
+#'   0.0609 default is the Diebold-Li value for maturities in months and places
+#'   the curvature hump at 29.4 years rather than months; see
+#'   \code{\link{ns_lambda}}.
 #' @param lambda_constraint Character. One of "fixed", "constrained", or "free":
 #'   - "fixed": lambda is fixed at the initial_lambda value.
 #'   - "constrained": lambda is optimized within bounds.
 #'   - "free": lambda is optimized without constraints.
+#'
+#'   With \code{method = "optim"} the search over lambda is weak: L-BFGS-B's
+#'   numerical gradient is poorly scaled when the betas are around 0.05 and
+#'   lambda around 0.5, and in practice lambda moves very little from
+#'   \code{initial_lambda} even when unconstrained. \code{method = "profile"}
+#'   searches lambda properly and reaches the same optimum from any starting
+#'   value, so prefer it when lambda is meant to be estimated rather than
+#'   supplied.
 #' @param lower_bounds Numeric vector of length 4. Lower bounds for parameters (beta1, beta2, beta3, lambda).
 #' @param upper_bounds Numeric vector of length 4. Upper bounds for parameters (beta1, beta2, beta3, lambda).
 #' @param optimizer Character. The optimization method to use. Default is
@@ -351,7 +364,10 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
 #'   \code{yield_data}.
 #' @param parallel Logical. If TRUE, use parallel processing to speed up computation.
 #' @param lambda_constraint Character. How to handle the lambda parameter (fixed, constrained, free).
-#' @param initial_lambda Numeric. Initial value for lambda parameter.
+#' @param initial_lambda Numeric. Initial value for lambda, passed to
+#'   \code{\link{fit_ns_model}}. See \code{\link{ns_lambda}} on its units: the
+#'   0.0609 default is a month-denominated constant and maturities here are in
+#'   years.
 #' @param show_progress Logical. If TRUE, display a progress bar.
 #' @param date_order Character. Row order of the returned \code{parameters} and
 #'   \code{fitted_yields}: \code{"input"} (the default) keeps the order the

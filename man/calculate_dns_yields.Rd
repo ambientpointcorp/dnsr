@@ -13,7 +13,10 @@ calculate_dns_yields(factors, maturities, lambda = 0.0609)
 
 \item{maturities}{Numeric vector. Maturities (in years) for the yield curve.}
 
-\item{lambda}{Numeric. DNS decay parameter lambda.}
+\item{lambda}{Numeric. DNS decay parameter lambda, per unit of maturity.
+Maturities here are in years, so the 0.0609 default is the Diebold-Li
+value for maturities in months and places the curvature hump at 29.4
+years rather than months; see \code{\link{ns_lambda}}.}
 }
 \value{
 Array of yields indexed by (time, maturity, path) if \code{factors} is

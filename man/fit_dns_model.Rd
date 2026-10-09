@@ -32,7 +32,10 @@ The window is selected by date, so it does not depend on the row order of
 
 \item{lambda_constraint}{Character. How to handle the lambda parameter (fixed, constrained, free).}
 
-\item{initial_lambda}{Numeric. Initial value for lambda parameter.}
+\item{initial_lambda}{Numeric. Initial value for lambda, passed to
+\code{\link{fit_ns_model}}. See \code{\link{ns_lambda}} on its units: the
+0.0609 default is a month-denominated constant and maturities here are in
+years.}
 
 \item{show_progress}{Logical. If TRUE, display a progress bar.}
 
