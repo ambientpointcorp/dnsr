@@ -130,6 +130,23 @@ It gains `initial_lambda` and `method`, forwarded to `fit_ns_model()` and
 appended to the signature, so the row is reproducible rather than merely
 better. The other rows take no search and are unaffected.
 
+## Documentation that the above made wrong
+
+The introduction vignette asserted that the default lambda ceiling of 0.5 was
+binding on the latest curve, and printed an `at_bound` report to prove it. With
+the ceiling at 2 nothing is clamped, so that section now imposes the old
+ceiling explicitly to show what a clamped fit looks like -- lambda resting on
+0.5 at 4.95 bp against 4.43 unclamped -- which makes the same point without
+depending on a defect. The free-lambda range quoted for the panel (0.04 to
+0.50) and the cost of fixing lambda (14 bp against 7) are both remeasured: 0.17
+to 2.00, and 6.4 bp against 4.5.
+
+The table comparing lambda = 0.0609 with 0.448 is unchanged, because it passes
+both values explicitly; two rounded entries are corrected to the measured 29.4
+years and -0.928. The README no longer says 0.0609 "remains this package's
+default for continuity", and the YUIMA vignette passes `ns_lambda(3.5)` rather
+than 0.0609 in its three simulation calls.
+
 # dnsr 0.5.0
 
 Documentation, plus one additive pair of helpers. No existing function changes

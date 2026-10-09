@@ -235,7 +235,7 @@ maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
 yields <- calculate_dns_yields(
   factors = sim_result$factors,
   maturities = maturities,
-  lambda = 0.0609
+  lambda = ns_lambda(3.5)
 )
 
 # Look at yields for the first path at selected time points
@@ -285,7 +285,7 @@ if (has_yuima) {
     params = params,
     initial_factors = initial_factors,
     maturities = maturities,
-    lambda = 0.0609,
+    lambda = ns_lambda(3.5),
     time_horizon = 5,
     n_steps = 60,
     n_paths = 10,
@@ -301,7 +301,7 @@ if (has_yuima) {
     params = params,
     initial_factors = initial_factors,
     maturities = maturities,
-    lambda = 0.0609,
+    lambda = ns_lambda(3.5),
     time_horizon = 5,
     n_steps = 60,
     n_paths = 10,
