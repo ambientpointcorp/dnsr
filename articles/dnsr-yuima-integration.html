@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -582,29 +582,29 @@ reversion to a mean that happens to sit where the data is.
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
 inherits the problem, since the level a process reverts to is only
 identified if the reversion itself is.</p>
-<p>So the practical reading is that
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>σ</mi><annotation encoding="application/x-tex">\sigma</annotation></semantics></math>
-and the correlation structure are the parts of these dynamics a short
-sample pins down;
+<p><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>σ</mi><annotation encoding="application/x-tex">\sigma</annotation></semantics></math>
+and the correlation structure are therefore the parts of these dynamics
+that a short sample determines;
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
 and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
-need either a long history or a prior.
+require either a long history or a prior.
 <code><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics()</a></code> reports standard errors and a
-half-life confidence interval for exactly this reason – see
-<code><a href="../articles/dns-model-introduction.html">vignette("dns-model-introduction", package = "dnsr")</a></code> – and
-the interval is usually wide enough to make the point on its own.</p>
-<p>The same caution applies to the regression estimator, not just to
-QMLE. It is a property of the data, not of the method.</p>
+half-life confidence interval for this reason; see
+<code><a href="../articles/dns-model-introduction.html">vignette("dns-model-introduction", package = "dnsr")</a></code>.</p>
+<p>The same applies to the regression estimator and to the one-step
+state-space estimator, <code><a href="../reference/estimate_dns_state_space.html">estimate_dns_state_space()</a></code>. It is a
+property of the data rather than of the method.</p>
 </div>
 <div class="section level2">
-<h2 id="conclusion">Conclusion<a class="anchor" aria-label="anchor" href="#conclusion"></a>
+<h2 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
 </h2>
-<p>The integration of the YUIMA package enhances the <code>dnsr</code>
-package’s simulation capabilities, offering more accurate and robust
-stochastic simulations for the DNS model. This is particularly important
-for risk management, economic scenario generation, and interest rate
-modeling applications where precision matters.</p>
+<p>YUIMA provides the SDE simulation and the QMLE and GMM estimators
+used above. For factor simulation specifically,
+<code>engine = "exact"</code> samples the transition law directly and
+carries no discretisation error, so YUIMA is needed here for its
+estimation functions and its wider class of models rather than for
+simulation accuracy.</p>
 <p>Key advantages of using YUIMA for DNS simulations include:</p>
 <ol style="list-style-type: decimal">
 <li>

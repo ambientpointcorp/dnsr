@@ -37,6 +37,8 @@ Estimate the Ornstein-Uhlenbeck dynamics of the fitted factors.
 
 - [`estimate_dns_dynamics()`](https://ambientpointcorp.github.io/dnsr/reference/estimate_dns_dynamics.md)
   : Dynamic Nelson-Siegel Model Dynamics
+- [`estimate_dns_state_space()`](https://ambientpointcorp.github.io/dnsr/reference/estimate_dns_state_space.md)
+  : Estimate the Dynamic Nelson-Siegel Model in One Step
 - [`dns_dynamics_to_sim_params()`](https://ambientpointcorp.github.io/dnsr/reference/dns_dynamics_to_sim_params.md)
   : Convert DNS Dynamics to Simulation Parameters
 - [`get_calibrated_dns_params()`](https://ambientpointcorp.github.io/dnsr/reference/get_calibrated_dns_params.md)

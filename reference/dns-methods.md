@@ -23,6 +23,15 @@ print(x, ...)
 
 # S3 method for class 'dns_simulation'
 print(x, ...)
+
+# S3 method for class 'dns_state_space'
+print(x, ...)
+
+# S3 method for class 'dns_state_space'
+summary(object, ...)
+
+# S3 method for class 'summary.dns_state_space'
+print(x, ...)
 ```
 
 ## Arguments

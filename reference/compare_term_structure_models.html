@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -100,15 +100,14 @@ to the longest observed yield.</p></dd>
 
 <dt id="arg-initial-lambda-method">initial_lambda, method<a class="anchor" aria-label="anchor" href="#arg-initial-lambda-method"></a></dt>
 <dd><p>Passed to <code><a href="fit_ns_model.html">fit_ns_model</a></code> for the
-"NS" row. They are exposed because the Nelson-Siegel row is the only one
-whose fit depends on a search, and so the only one that can be
-misrepresented by a weak one: before 0.6.0 this table reported 8.87 bp for
-Nelson-Siegel on the bundled panel, behind the cubic spline's 5.56, purely
-because of the lambda default and the stopping rule. It now reports 4.43,
-ahead of the spline. Passing <code>initial_lambda = 0.0609,
-  method = "optim"</code> restores the old configuration, which reports 8.57 –
-near the old row but not identical to it, because the objective is now
-scaled and the search therefore stops in a different place.</p></dd>
+"NS" row, which is the only row whose fit depends on a numerical search.
+Before 0.6.0 this table reported 8.87 bp for Nelson-Siegel on the bundled
+panel against the cubic spline's 5.56, a difference attributable to the
+lambda default and the optimiser's stopping rule rather than to the
+models. It now reports 4.43. Passing <code>initial_lambda = 0.0609,
+  method = "optim"</code> restores the earlier configuration and reports 8.57,
+which differs from 8.87 because the objective is now scaled and the
+search stops at a different point.</p></dd>
 
 </dl></div>
     <div class="section level2">

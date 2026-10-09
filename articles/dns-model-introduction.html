@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,7 +74,7 @@ package</h4>
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
 <p>The <code>dnsr</code> package implements the Dynamic Nelson-Siegel
-(DNS) model for yield curve modelling. This vignette walks the whole
+(DNS) model for yield curve modelling. This vignette covers the
 workflow: fitting the curve, estimating how its factors move, simulating
 forward, and pricing off the result.</p>
 <p>Everything here runs against <code>treasury_yields</code>, a six-year
@@ -131,57 +131,54 @@ controls how fast the factor loadings decay.</li>
 loads equally on every maturity, the slope loads most at the short end
 and decays to zero, and the curvature peaks somewhere in the middle.</p>
 <div class="section level3">
-<h3 id="a-word-about-lambda-because-its-units-matter">A word about lambda, because its units matter<a class="anchor" aria-label="anchor" href="#a-word-about-lambda-because-its-units-matter"></a>
+<h3 id="the-units-of-lambda">The units of lambda<a class="anchor" aria-label="anchor" href="#the-units-of-lambda"></a>
 </h3>
 <p><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
 appears only as the product
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mi>m</mi></mrow><annotation encoding="application/x-tex">\lambda m</annotation></semantics></math>,
 so it is measured per unit of maturity. Its numerical value therefore
-depends on whether maturities are years or months, and nothing about a
+depends on whether maturities are years or months, and a
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-on its own tells you which. <strong>Every function in this package takes
-maturities in years.</strong></p>
-<p>This is worth labouring because the conventional value is a trap.
-Diebold and Li chose
+quoted on its own does not say which. Every function in this package
+takes maturities in years.</p>
+<p>Diebold and Li chose
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>0.0609</mn></mrow><annotation encoding="application/x-tex">\lambda = 0.0609</annotation></semantics></math>
 working in <em>months</em>, where it places the curvature hump just
-short of 30 months. Quoted against maturities in years it means
-something quite different:</p>
+short of 30 months. Against maturities in years the same number places
+it elsewhere:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/ns_lambda.html">ns_curvature_peak</a></span><span class="op">(</span><span class="fl">0.0609</span><span class="op">)</span>   <span class="co"># where the hump sits, in the maturity's own units</span></span>
 <span><span class="co">#&gt; [1] 29.44634</span></span></code></pre></div>
-<p>Twenty-nine years, which is off the end of most curves: the
-“curvature” factor is then doing almost nothing a level factor could
-not. <code><a href="../reference/ns_lambda.html">ns_lambda()</a></code> goes the other way, from the maturity you
-want the hump at to the decay that puts it there:</p>
+<p>Twenty-nine years, beyond the end of most curves, where the curvature
+loading is close to flat. <code><a href="../reference/ns_lambda.html">ns_lambda()</a></code> maps in the other
+direction, from a hump maturity to the decay that places it there:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">2.5</span><span class="op">)</span>   <span class="co"># a hump at two and a half years</span></span>
 <span><span class="co">#&gt; [1] 0.7173128</span></span>
 <span><span class="fu"><a href="../reference/ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">30</span><span class="op">)</span>    <span class="co"># the Diebold-Li criterion, in the months they worked in</span></span>
 <span><span class="co">#&gt; [1] 0.05977607</span></span></code></pre></div>
-<p>So the honest reading of <code>0.0609</code> is that it is right for
-month-denominated maturities and simply wrong here, which is why this
-package’s default is <code>ns_lambda(3.5)</code> – a hump at three and a
-half years, near the middle of a Treasury curve. Compare the two:</p>
+<p><code>0.0609</code> is therefore correct for month-denominated
+maturities and incorrect for maturities in years. The package default is
+<code>ns_lambda(3.5)</code>, a hump at three and a half years, near the
+middle of a Treasury curve. The two loadings:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_dns_loadings.html">plot_dns_loadings</a></span><span class="op">(</span>lambda <span class="op">=</span> <span class="fl">0.0609</span><span class="op">)</span></span></code></pre></div>
 <p><img src="dns-model-introduction_files/figure-html/loadings-1.png" class="r-plt" alt="" width="700"></p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_dns_loadings.html">plot_dns_loadings</a></span><span class="op">(</span>lambda <span class="op">=</span> <span class="fu"><a href="../reference/ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">2.5</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><img src="dns-model-introduction_files/figure-html/loadings_fast-1.png" class="r-plt" alt="" width="700"></p>
-<p>The first has no hump to speak of inside thirty years. The second is
-the shape the three-factor story describes.</p>
-<p>This is not a cosmetic point. At
+<p>The first has no hump within thirty years. The second has the shape
+the three-factor description implies.</p>
+<p>The consequence is in the fit, not only the picture. At
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>0.0609</mn></mrow><annotation encoding="application/x-tex">\lambda = 0.0609</annotation></semantics></math>
-the <em>slope</em> loading only falls from 0.992 at three months to
-0.749 at ten years – nearly flat, and so nearly collinear with the level
-loading, which is 1 everywhere. The two factors stop being separately
-identified, and
+the slope loading falls from 0.992 at three months to 0.749 at ten
+years, which is close to the level loading of 1 at every maturity. The
+two factors are then nearly collinear and not separately identified, and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
-stops behaving like a slope at all. Fitting the same panel both ways and
+no longer behaves like a slope. Fitting the same panel both ways and
 comparing
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
-with the spread the market quotes:</p>
+with the quoted spread:</p>
 <table class="table">
 <colgroup>
 <col width="20%">
@@ -202,35 +199,35 @@ with the spread the market quotes:</p>
 <tr class="odd">
 <td align="right">0.0609</td>
 <td align="right">29.4 y</td>
-<td align="right"><strong>-0.928</strong></td>
-<td align="right"><strong>5%</strong></td>
+<td align="right">-0.928</td>
+<td align="right">5%</td>
 <td align="right">23.0 bp</td>
 </tr>
 <tr class="even">
 <td align="right">0.448</td>
 <td align="right">4.0 y</td>
-<td align="right"><strong>+0.941</strong></td>
-<td align="right"><strong>90%</strong></td>
+<td align="right">+0.941</td>
+<td align="right">90%</td>
 <td align="right">5.3 bp</td>
 </tr>
 </tbody>
 </table>
-<p>At the month-denominated value the slope factor is
-<em>anti</em>-correlated with the slope, and carries the right sign on
-one date in twenty. That is the cost of the unit mismatch, and it is why
-<code>dnsr</code> does not use 0.0609 as its default.</p>
-<p>Two cautions before leaning on <code><a href="../reference/ns_lambda.html">ns_lambda()</a></code>. The peak is
-flat – at half or double the nominal peak maturity the curvature loading
-is still about 85 percent of its maximum – so
+<p>At the month-denominated value the slope factor is negatively
+correlated with the spread and carries the same sign on 5 percent of
+dates. <code>dnsr</code> therefore does not use 0.0609 as its
+default.</p>
+<p>Two qualifications on <code><a href="../reference/ns_lambda.html">ns_lambda()</a></code>. The curvature peak is
+flat: at half or double the nominal peak maturity the loading is still
+about 85 percent of its maximum, so
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-is not tightly pinned by this choice and the precision of the number is
-misleading. And
+is not tightly determined by this choice and the precision of the
+returned number overstates what it fixes. And
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-sets the slope loading’s decay at the same time, which is often the more
-consequential effect: a hump at 2.5 years leaves the slope loading at
-0.53 by two years, a hump at 10 years leaves it at 0.84. Where
+also sets the decay of the slope loading, which is often the larger
+effect: a hump at 2.5 years leaves the slope loading at 0.53 by two
+years, a hump at 10 years leaves it at 0.84. Estimate
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-can be estimated rather than chosen, estimate it.</p>
+where that is possible.</p>
 </div>
 </div>
 <div class="section level2">
@@ -273,18 +270,17 @@ so it needs no starting values for them:</p>
 <span><span class="co">#&gt;   beta3 (curvature) -0.01551</span></span>
 <span><span class="co">#&gt;   lambda            0.66877</span></span>
 <span><span class="co">#&gt;   rmse              4.43 bp over 11 maturities</span></span></code></pre></div>
-<p>The fit also reports whether any parameter came to rest on one of its
-bounds, which is worth checking rather than assuming. A clamped fit can
-still look respectable on RMSE while the factor decomposition means
-nothing, and a bounded optimiser reports convergence at a bound, so
-<code>success</code> alone cannot tell you:</p>
+<p>The fit reports whether any parameter came to rest on one of its
+bounds. A clamped fit can have a low RMSE while the factor decomposition
+is not identified, and a bounded optimiser reports convergence at a
+bound, so <code>success</code> alone does not distinguish the two:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">curve</span><span class="op">$</span><span class="va">at_bound</span></span>
 <span><span class="co">#&gt;  beta1  beta2  beta3 lambda </span></span>
 <span><span class="co">#&gt;  FALSE  FALSE  FALSE  FALSE</span></span></code></pre></div>
-<p>Nothing is clamped here. It is easy to arrange that it is, and the
-point is worth seeing, because this is exactly what the old ceiling of
-0.5 did to this curve – it wants a faster decay than that allowed:</p>
+<p>Nothing is clamped here. Imposing the ceiling of 0.5 used before
+version 0.6.0 clamps this curve, which fits a faster decay than that
+allows:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pinched</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_ns_model.html">fit_ns_model</a></span><span class="op">(</span><span class="va">maturities</span>, <span class="va">latest</span>,</span>
 <span>                        upper_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span></span>
@@ -297,39 +293,33 @@ point is worth seeing, because this is exactly what the old ceiling of
 <span><span class="va">pinched</span><span class="op">$</span><span class="va">at_bound</span></span>
 <span><span class="co">#&gt;  beta1  beta2  beta3 lambda </span></span>
 <span><span class="co">#&gt;  FALSE  FALSE  FALSE   TRUE</span></span></code></pre></div>
-<p>The clamped fit reports
+<p>The clamped fit returns
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-sitting exactly on 0.5 and a worse error, and says so through
-<code>at_bound</code> instead of presenting it as an unqualified
-success.</p>
+exactly on 0.5 with a higher error, and flags it through
+<code>at_bound</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="fitting-the-panel">Fitting the Panel<a class="anchor" aria-label="anchor" href="#fitting-the-panel"></a>
 </h2>
 <p><code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> fits every date. The window is selected
 by date, so it does not matter which row order the panel arrives in.</p>
-<p>For a panel there is a choice to make that does not arise for a
-single curve. If
+<p>A panel raises a choice that a single curve does not. If
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-is estimated freely it varies from date to date – on this data from 0.17
-to 2.00, the ceiling – and then
+is estimated freely it varies from date to date, on this data from 0.17
+to 2.00, the ceiling.
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
-on one date does not mean the same thing as
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
-on the next, because the loading it multiplies has changed shape. The
-betas stop being a comparable time series, which is precisely what the
-next step needs them to be.</p>
+then multiplies a differently shaped loading at each date, so the betas
+are not a comparable time series, which is what the next step
+requires.</p>
 <p>Standard DNS practice, following Diebold and Li, therefore fixes
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-at a single value for the whole panel. It costs cross-sectional fit –
+at a single value for the whole panel. The cost is cross-sectional fit,
 about 6.4 basis points median here against 4.5 with
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
-free – and buys factors that can be modelled over time. The size of that
-trade is worth noting: a couple of basis points of fit for factors that
-are comparable across dates.</p>
-<p><code>ns_lambda(4)</code> puts the curvature hump at four years,
-which is about where this panel wants it, and keeps the loadings
-distinct enough for the factors to mean what they are called:</p>
+free; the gain is factors that are comparable across dates and can be
+modelled over time.</p>
+<p><code>ns_lambda(4)</code> places the curvature hump at four years,
+close to the panel optimum, and keeps the loadings distinct:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">recent</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_dns_model.html">fit_dns_model</a></span><span class="op">(</span><span class="va">treasury_yields</span>, n_days <span class="op">=</span> <span class="fl">250</span>, show_progress <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>                        lambda_constraint <span class="op">=</span> <span class="st">"fixed"</span>,</span>
@@ -371,11 +361,10 @@ the fit error:</p>
 <code class="sourceCode R"><span><span class="va">factor_plots</span><span class="op">$</span><span class="va">rmse</span></span></code></pre></div>
 <p><img src="dns-model-introduction_files/figure-html/plot_rmse-1.png" class="r-plt" alt="" width="700"></p>
 <div class="section level3">
-<h3 id="do-the-factors-mean-what-they-claim">Do the factors mean what they claim?<a class="anchor" aria-label="anchor" href="#do-the-factors-mean-what-they-claim"></a>
+<h3 id="checking-the-factor-interpretation">Checking the factor interpretation<a class="anchor" aria-label="anchor" href="#checking-the-factor-interpretation"></a>
 </h3>
-<p>The three factors are supposed to be level, slope and curvature. That
-is checkable, and worth checking before anything is built on them. The
-slope factor should track the spread the market actually quotes:</p>
+<p>The three factors are described as level, slope and curvature. Each
+claim is testable. The slope factor should track the quoted spread:</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">aligned</span> <span class="op">&lt;-</span> <span class="va">treasury_yields</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">recent</span><span class="op">$</span><span class="va">parameters</span><span class="op">$</span><span class="va">Date</span>, <span class="va">treasury_yields</span><span class="op">$</span><span class="va">Date</span><span class="op">)</span>, <span class="op">]</span></span>
 <span><span class="va">observed_spread</span> <span class="op">&lt;-</span> <span class="va">aligned</span><span class="op">[[</span><span class="st">"0.25"</span><span class="op">]</span><span class="op">]</span> <span class="op">-</span> <span class="va">aligned</span><span class="op">[[</span><span class="st">"10"</span><span class="op">]</span><span class="op">]</span></span>
@@ -386,27 +375,27 @@ slope factor should track the spread the market actually quotes:</p>
 <span><span class="op">)</span></span>
 <span><span class="co">#&gt; correlation   same_sign </span></span>
 <span><span class="co">#&gt;   0.9410156   0.9040000</span></span></code></pre></div>
-<p>Closely, and with the sign the algebra predicts: the slope loading is
-1 at the short end and decays to zero, so
+<p>The correlation is high and the sign follows from the loadings: the
+slope loading is 1 at the short end and decays to zero, so
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mtext mathvariant="normal">short</mtext><mo stretchy="false" form="postfix">)</mo><mo>≈</mo><msub><mi>β</mi><mn>1</mn></msub><mo>+</mo><msub><mi>β</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">y(\text{short}) \approx \beta_1 + \beta_2</annotation></semantics></math>
 and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mtext mathvariant="normal">long</mtext><mo stretchy="false" form="postfix">)</mo><mo>≈</mo><msub><mi>β</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">y(\text{long}) \approx \beta_1</annotation></semantics></math>,
-which makes
+making
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
 the short-minus-long spread. A positive
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>
-is an inverted curve.</p>
-<p>And the level factor should look like the policy cycle:</p>
+corresponds to an inverted curve.</p>
+<p>The level factor tracks the policy cycle:</p>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">recent</span><span class="op">$</span><span class="va">parameters</span><span class="op">$</span><span class="va">beta1</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] 0.04314019 0.05018226</span></span></code></pre></div>
 </div>
 <div class="section level3">
-<h3 id="where-a-three-factor-curve-runs-out">Where a three-factor curve runs out<a class="anchor" aria-label="anchor" href="#where-a-three-factor-curve-runs-out"></a>
+<h3 id="residuals-by-maturity">Residuals by maturity<a class="anchor" aria-label="anchor" href="#residuals-by-maturity"></a>
 </h3>
-<p>The median fit error is a summary; the structure of the residuals
-says more. Three factors cannot bend arbitrarily, and the place they
-struggle is predictable:</p>
+<p>The median fit error summarises the residuals; their distribution
+across maturities is more informative. Three factors constrain the
+shapes the curve can take:</p>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fitted_rows</span> <span class="op">&lt;-</span> <span class="va">recent</span><span class="op">$</span><span class="va">fitted_yields</span></span>
 <span><span class="va">residual</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">aligned</span><span class="op">[</span>, <span class="op">-</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span> <span class="op">-</span> <span class="va">fitted_rows</span></span>
@@ -428,18 +417,17 @@ struggle is predictable:</p>
 <span><span class="co">#&gt; 10      10.0000    -1.2     3.2</span></span>
 <span><span class="co">#&gt; 20      20.0000     8.6     8.7</span></span>
 <span><span class="co">#&gt; 30      30.0000    -8.7     9.4</span></span></code></pre></div>
-<p>The errors are not spread evenly. The middle of the curve, where the
-curvature factor is doing its work, fits to a couple of basis points;
-the two ends are three to five times worse, and the long end carries a
-visible bias – twenty years is fitted low and thirty high, the signature
-of a single exponential decay being asked to describe a curve that
-flattens faster than it can. The one-month point is poorly fitted for a
-different reason: it is barely on the same curve as the rest, and no
-three-factor shape passes through both the bill market and the
-thirty-year.</p>
-<p>Which end matters is a property of your application, not of the
-model. If you are discounting long cashflows, the median RMSE is the
-wrong summary to be reassured by.</p>
+<p>The errors are not uniform across maturities. The middle of the
+curve, where the curvature loading is largest, fits to a few basis
+points. Both ends are three to five times worse, and the long end shows
+a systematic pattern: twenty years is fitted low and thirty high, which
+is what a single exponential decay produces on a curve that flattens
+faster than it can represent. The one-month point has a different cause:
+it is not well described by the same curve as the rest, and no
+three-factor shape fits both the bill market and the thirty-year
+point.</p>
+<p>Which maturities matter depends on the application. For discounting
+long cashflows, the median RMSE is not the relevant summary.</p>
 </div>
 </div>
 <div class="section level2">
@@ -448,16 +436,16 @@ wrong summary to be reassured by.</p>
 <p><code><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics()</a></code> regresses each factor’s change
 on its lagged level. By default it samples the factor series at
 month-ends and estimates at
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>t</mi><mo>=</mo><mn>1</mn><mi>/</mi><mn>12</mn></mrow><annotation encoding="application/x-tex">\Delta t = 1/12</annotation></semantics></math>:
-daily cross-sectional refits carry measurement noise that is serially
-uncorrelated, and an OU regression on daily changes reads that noise as
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>t</mi><mo>=</mo><mn>1</mn><mi>/</mi><mn>12</mn></mrow><annotation encoding="application/x-tex">\Delta t = 1/12</annotation></semantics></math>.
+Daily cross-sectional refits carry serially uncorrelated measurement
+noise, and an OU regression on daily changes attributes that noise to
 mean reversion, inflating
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
-by an order of magnitude.</p>
-<p>Because the estimation uses month-ends anyway, fitting only those is
-enough and is far quicker. <code>warm_start = FALSE</code> makes each
-cross-section independent of which other dates are in the panel, so
-these fits are the ones fitting every day would have produced:</p>
+by about an order of magnitude.</p>
+<p>Since the estimation uses month-ends, fitting only those is
+sufficient and faster. <code>warm_start = FALSE</code> makes each
+cross-section independent of the other dates in the panel, so these fits
+match what fitting every day would produce:</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">month_ends</span> <span class="op">&lt;-</span> <span class="va">treasury_yields</span><span class="op">[</span></span>
 <span>  <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/duplicated.html" class="external-link">duplicated</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">$</span><span class="va">Date</span>, <span class="st">"%Y-%m"</span><span class="op">)</span>, fromLast <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
@@ -480,10 +468,8 @@ these fits are the ones fitting every day would have produced:</p>
 <span><span class="co">#&gt; curvature (b3) 1.5240   0.7039 -0.0150 0.0306      0.4548</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt;   stable           TRUE (eigenvalues 1.524 0.353 0.060)</span></span></code></pre></div>
-<p>The standard errors are worth reading before anything is built on
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>.
-Mean reversion is weakly identified in a sample this short, and the
-half-life interval says so:</p>
+<p>Mean reversion is weakly determined in a sample this short. The
+standard errors and the half-life interval show the range involved:</p>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">se</span></span>
 <span><span class="co">#&gt;        kappa        theta        sigma </span></span>
@@ -495,13 +481,14 @@ half-life interval says so:</p>
 <span><span class="co">#&gt;     lower     upper </span></span>
 <span><span class="co">#&gt; 0.9592606       Inf</span></span></code></pre></div>
 <p><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
-also carries a well-known upward small-sample bias of order
+also carries an upward small-sample bias of order
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>5</mn><mi>/</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">5/T</annotation></semantics></math>
 in a sample of
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>T</mi><annotation encoding="application/x-tex">T</annotation></semantics></math>
-years, which these standard errors describe nothing about: they are
-sampling noise, not bias.</p>
-<p>Factor innovations are correlated, and the simulation uses that:</p>
+years. The standard errors above measure sampling noise, not that
+bias.</p>
+<p>Factor innovations are correlated, and the simulation uses the
+correlation:</p>
 <div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">dynamics</span><span class="op">$</span><span class="va">correlation</span>, <span class="fl">3</span><span class="op">)</span></span>
 <span><span class="co">#&gt;        beta1  beta2  beta3</span></span>
@@ -513,7 +500,7 @@ sampling noise, not bias.</p>
 </h3>
 <p>By default the three factors revert independently.
 <code>structure = "full"</code> estimates the Diebold-Li VAR(1) instead,
-in which a shock to one factor pulls the others:</p>
+in which a shock to one factor affects the others:</p>
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">full</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics</a></span><span class="op">(</span><span class="va">monthly_fit</span><span class="op">$</span><span class="va">parameters</span>, structure <span class="op">=</span> <span class="st">"full"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">full</span><span class="op">$</span><span class="va">kappa_matrix</span>, <span class="fl">3</span><span class="op">)</span></span>
@@ -521,9 +508,9 @@ in which a shock to one factor pulls the others:</p>
 <span><span class="co">#&gt; beta1  0.436 -0.494 -0.391</span></span>
 <span><span class="co">#&gt; beta2 -1.190  0.866 -0.843</span></span>
 <span><span class="co">#&gt; beta3  0.921  0.635  1.675</span></span></code></pre></div>
-<p>The eigenvalues of that matrix decide whether the system is stable,
-which a diagonal reconstruction would get wrong whenever the cross terms
-matter:</p>
+<p>The eigenvalues of that matrix determine whether the system is
+stable. A diagonal reconstruction gives a different answer when the
+cross terms are non-negligible:</p>
 <div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/complex.html" class="external-link">Re</a></span><span class="op">(</span><span class="va">full</span><span class="op">$</span><span class="va">eigenvalues</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] 1.176 1.176 0.626</span></span>
@@ -532,11 +519,9 @@ matter:</p>
 </div>
 </div>
 <div class="section level2">
-<h2 id="is-the-fit-trustworthy">Is the Fit Trustworthy?<a class="anchor" aria-label="anchor" href="#is-the-fit-trustworthy"></a>
+<h2 id="diagnostics">Diagnostics<a class="anchor" aria-label="anchor" href="#diagnostics"></a>
 </h2>
-<p>The package reports its own reliability in several places, and they
-are easy to miss because each one lives on a different object. Worth
-checking all of them before using a calibration:</p>
+<p>The package reports fit diagnostics across several objects:</p>
 <div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># 1. Did every cross-section fit at all?</span></span>
 <span><span class="va">recent</span><span class="op">$</span><span class="va">success_rate</span></span>
@@ -565,21 +550,22 @@ checking all of them before using a calibration:</p>
 <span><span class="va">dynamics</span><span class="op">$</span><span class="va">beta1</span><span class="op">$</span><span class="va">half_life_ci</span></span>
 <span><span class="co">#&gt;     lower     upper </span></span>
 <span><span class="co">#&gt; 0.9592606       Inf</span></span></code></pre></div>
-<p>Taken together: a high success rate with no bound hits, a tolerable
-worst-case RMSE, a stable system, and a half-life interval you would be
-willing to quote. If the half-life interval runs to infinity, as it does
-on this six-year sample,
+<p>What to look for: a high success rate with no bound hits, an
+acceptable worst-case RMSE, a stable system, and a finite half-life
+interval. If the half-life interval runs to infinity, as it does on this
+six-year sample,
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
-is not identified and any simulation horizon longer than the sample is
-an extrapolation of something the data did not pin down.</p>
+is not determined by the data, and a simulation horizon longer than the
+sample extrapolates beyond what was estimated.</p>
 </div>
 <div class="section level2">
 <h2 id="simulating-future-yield-curves">Simulating Future Yield Curves<a class="anchor" aria-label="anchor" href="#simulating-future-yield-curves"></a>
 </h2>
 <p>The factor system is a linear SDE whose diffusion does not depend on
 the state, so its transition law over any step is a known Gaussian.
-<code>engine = "exact"</code> samples that law directly: no
-discretisation error at any step size, and no extra package.</p>
+<code>engine = "exact"</code> samples that law directly, which carries
+no discretisation error at any step size and needs no additional
+package.</p>
 <div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">latest_row</span> <span class="op">&lt;-</span> <span class="va">monthly_fit</span><span class="op">$</span><span class="va">parameters</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.max</a></span><span class="op">(</span><span class="va">monthly_fit</span><span class="op">$</span><span class="va">parameters</span><span class="op">$</span><span class="va">Date</span><span class="op">)</span>, <span class="op">]</span></span>
 <span><span class="va">initial_factors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">latest_row</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta1"</span>, <span class="st">"beta2"</span>, <span class="st">"beta3"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
@@ -619,15 +605,14 @@ rather than sorting lexically, so “Year 5” comes after “Year 3”:</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_simulated_factors.html">plot_simulated_factors</a></span><span class="op">(</span><span class="va">simulation</span><span class="op">)</span><span class="op">$</span><span class="va">level</span></span></code></pre></div>
 <p><img src="dns-model-introduction_files/figure-html/plot_simulated_factors-1.png" class="r-plt" alt="" width="700"></p>
 <p>The YUIMA engine remains available and is the default, for the
-estimation machinery that comes with it. See
+estimation functions it provides. See
 <code><a href="../articles/dnsr-yuima-integration.html">vignette("dnsr-yuima-integration", package = "dnsr")</a></code>.</p>
 </div>
 <div class="section level2">
 <h2 id="pricing-off-a-fitted-curve">Pricing off a Fitted Curve<a class="anchor" aria-label="anchor" href="#pricing-off-a-fitted-curve"></a>
 </h2>
-<p>A fitted curve is only useful if it discounts cashflows. The DNS
-curve gives continuously compounded zero rates, so the discount factor
-at maturity
+<p>The DNS curve gives continuously compounded zero rates, so the
+discount factor at maturity
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>m</mi><annotation encoding="application/x-tex">m</annotation></semantics></math>
 is
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>−</mi><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo stretchy="false" form="postfix">)</mo><mspace width="0.167em"></mspace><mi>m</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">P(m) = \exp(-y(m)\,m)</annotation></semantics></math>:</p>
@@ -651,12 +636,12 @@ is
 <span><span class="co">#&gt; 5     10.0    4.621   0.6300     63.00   4.639</span></span>
 <span><span class="co">#&gt; 6     30.0    4.824   0.2352     23.52   4.812</span></span></code></pre></div>
 <p>Par yields are the coupon rate that prices a bullet bond at par. They
-differ from the zero yields for two reasons that can pull in opposite
-directions: a compounding convention term, since the curve is
-continuously compounded while the par rate pays twice a year, and a
-shape term, since coupons are discounted at the earlier rates rather
-than the terminal one. The first dominates at the short end and the
-second further out.</p>
+differ from zero yields for two reasons with opposite signs: a
+compounding term, since the curve is continuously compounded while the
+par rate pays semi-annually, and a shape term, since coupons are
+discounted at the earlier rates rather than the terminal one. The
+compounding term dominates at the short end, the shape term further
+out.</p>
 <p>Forward rates come off the same factors:</p>
 <div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
@@ -677,8 +662,8 @@ short rates and the 2022-2023 inversion:</p>
 <p><img src="dns-model-introduction_files/figure-html/heatmap-1.png" class="r-plt" alt="" width="700"></p>
 <p>Principal components of the daily changes. Decomposing the covariance
 matrix rather than standardising each maturity first is the usual
-convention for yield curves, and is what produces the familiar level,
-slope and curvature shapes:</p>
+convention for yield curves, and produces the level, slope and curvature
+shapes:</p>
 <div class="sourceCode" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pca</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_yield_pca.html">plot_yield_pca</a></span><span class="op">(</span><span class="va">treasury_yields</span>, scale <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">pca</span><span class="op">$</span><span class="va">var_explained</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">]</span>, <span class="fl">4</span><span class="op">)</span></span>
@@ -686,8 +671,7 @@ slope and curvature shapes:</p>
 <span><span class="va">pca</span><span class="op">$</span><span class="va">plots</span><span class="op">$</span><span class="va">weights</span></span></code></pre></div>
 <p><img src="dns-model-introduction_files/figure-html/pca-1.png" class="r-plt" alt="" width="700"></p>
 <p>The first three components are the empirical counterpart of the
-model’s three factors, which is the reason a three-factor curve works as
-well as it does.</p>
+model’s three factors.</p>
 </div>
 <div class="section level2">
 <h2 id="comparing-term-structure-models">Comparing Term Structure Models<a class="anchor" aria-label="anchor" href="#comparing-term-structure-models"></a>
@@ -708,46 +692,97 @@ one cross-section and reports the error of each, in basis points:</p>
 <code class="sourceCode R"><span><span class="va">comparison</span><span class="op">$</span><span class="va">plot</span></span></code></pre></div>
 <p><img src="dns-model-introduction_files/figure-html/comparison_plot-1.png" class="r-plt" alt="" width="700"></p>
 <p>Nelson-Siegel-Svensson adds a second curvature term with its own
-decay, so it nests Nelson-Siegel and must fit at least as well; the
-question is whether the two extra parameters are worth it. A smoothing
-spline will generally beat both on in-sample error while saying nothing
-about the shape, which is the trade the parametric models exist to
-make.</p>
+decay. It nests Nelson-Siegel and so cannot fit worse in sample, at the
+cost of two further parameters. A smoothing spline usually has a lower
+in-sample error than either and imposes no shape, so its parameters do
+not carry an interpretation.</p>
+</div>
+<div class="section level2">
+<h2 id="one-step-estimation">One-Step Estimation<a class="anchor" aria-label="anchor" href="#one-step-estimation"></a>
+</h2>
+<p>Everything above estimates in two steps: each cross-section is
+fitted, and the resulting factors are then treated as data for a
+time-series model. The factors are estimates carrying sampling error,
+and using them as observed biases
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
+upward.</p>
+<p><code><a href="../reference/estimate_dns_state_space.html">estimate_dns_state_space()</a></code> estimates the same model in
+one step, as the state-space system of Diebold, Rudebusch and Aruoba, by
+maximum likelihood with a Kalman filter. The factors become an
+unobserved state, their measurement uncertainty enters the likelihood,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>
+is estimated jointly with the dynamics, and missing maturities are
+handled by shrinking the measurement equation for that date.</p>
+<div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">one_step</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/estimate_dns_state_space.html">estimate_dns_state_space</a></span><span class="op">(</span><span class="va">treasury_yields</span>,</span>
+<span>                                     lambda <span class="op">=</span> <span class="fu"><a href="../reference/ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">3.5</span><span class="op">)</span>,</span>
+<span>                                     measurement <span class="op">=</span> <span class="st">"common"</span><span class="op">)</span></span>
+<span><span class="va">one_step</span></span>
+<span><span class="co">#&gt; DNS one-step state-space fit (Kalman filter, maximum likelihood)</span></span>
+<span><span class="co">#&gt;   estimated on     2019-01-31 to 2024-12-31</span></span>
+<span><span class="co">#&gt;   sampling         monthly (dt = 1/11.8), 72 dates, 11 maturities</span></span>
+<span><span class="co">#&gt;   lambda           0.5124 fixed (hump at 3.50 years)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;                 kappa   theta  sigma half_life_y</span></span>
+<span><span class="co">#&gt; level (b1)     0.1214  0.0365 0.0078      5.7109</span></span>
+<span><span class="co">#&gt; slope (b2)     0.4663 -0.0034 0.0109      1.4865</span></span>
+<span><span class="co">#&gt; curvature (b3) 0.4533 -0.0160 0.0259      1.5291</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;   measurement sd   13.37 bp median across maturities</span></span>
+<span><span class="co">#&gt;   fit              11.92 bp rmse</span></span>
+<span><span class="co">#&gt;   logLik           3863.72 on 13 parameters (AIC -7701.4, BIC -7640.7)</span></span>
+<span><span class="co">#&gt;   stable           TRUE</span></span>
+<span><span class="co">#&gt;   $two_step holds the two-step estimates used as starting values</span></span></code></pre></div>
+<p>The smoothed factors have the same shape as the two-step
+<code>parameters</code> frame, and <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> reports both
+sets side by side:</p>
+<div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">one_step</span><span class="op">$</span><span class="va">factors</span><span class="op">)</span></span>
+<span><span class="co">#&gt;         Date      beta1        beta2       beta3</span></span>
+<span><span class="co">#&gt; 1 2019-01-31 0.03007925 -0.005008562 -0.01156606</span></span>
+<span><span class="co">#&gt; 2 2019-02-28 0.03077127 -0.005530049 -0.01055434</span></span>
+<span><span class="co">#&gt; 3 2019-03-29 0.02872613 -0.003504591 -0.01647100</span></span>
+<span><span class="co">#&gt; 4 2019-04-30 0.02929922 -0.003959725 -0.01651064</span></span>
+<span><span class="co">#&gt; 5 2019-05-31 0.02671109 -0.001949996 -0.02249331</span></span>
+<span><span class="co">#&gt; 6 2019-06-28 0.02555954 -0.002923954 -0.02310094</span></span></code></pre></div>
+<p>The costs are run time, needing the whole panel at once, and a harder
+numerical problem. There is also a limit on what either estimator
+determines:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math>,
+the shock volatilities and the measurement error are recovered
+precisely, but
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math>
+and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
+are not well determined at realistic sample lengths.
+<code><a href="../reference/estimate_dns_state_space.html">?estimate_dns_state_space</a></code> gives the measured errors from
+simulated data.</p>
+<p>The factor system here is diagonal. For a full mean-reversion matrix,
+use <code>estimate_dns_dynamics(structure = "full")</code> on two-step
+betas.</p>
 </div>
 <div class="section level2">
 <h2 id="what-this-package-does-not-do">What This Package Does Not Do<a class="anchor" aria-label="anchor" href="#what-this-package-does-not-do"></a>
 </h2>
-<p>Two limits are worth stating plainly, because they are choices rather
-than omissions.</p>
-<p><strong>It estimates in two steps, not one.</strong> Each
-cross-section is fitted, and then the resulting factors are treated as
-data for a time-series model. Diebold, Rudebusch and Aruoba cast the
-same model as a state-space system and estimate everything at once with
-a Kalman filter, which propagates the cross-sectional uncertainty into
-the dynamics instead of discarding it, and handles missing maturities
-naturally. The two-step approach is simpler, much faster, and what the
-original Diebold-Li paper used; it is also why the standard errors here
-describe the factor regressions and not the factors’ own measurement
-error.</p>
 <p><strong>It carries no arbitrage-free restriction.</strong>
-Nelson-Siegel is a flexible curve, not a term structure model derived
-from a no-arbitrage condition, so nothing stops a fitted or simulated
-curve implying arbitrage. The arbitrage-free variant, AFNS, adds a
-yield-adjustment term that pins the dynamics and the cross-section
-together. If you are pricing derivatives off these curves rather than
-discounting cashflows, that distinction matters.</p>
+Nelson-Siegel is a flexible curve rather than a term structure model
+derived from a no-arbitrage condition, so a fitted or simulated curve
+can imply arbitrage. The arbitrage-free variant, AFNS, adds a
+yield-adjustment term that ties the dynamics and the cross-section
+together. The distinction matters for pricing derivatives off these
+curves, less so for discounting cashflows.</p>
 </div>
 <div class="section level2">
 <h2 id="where-to-go-next">Where to Go Next<a class="anchor" aria-label="anchor" href="#where-to-go-next"></a>
 </h2>
-<div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Live Treasury data, caching and the API key</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"fred-api-setup"</span>, package <span class="op">=</span> <span class="st">"dnsr"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># The YUIMA engine, and quasi-maximum-likelihood estimation</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"dnsr-yuima-integration"</span>, package <span class="op">=</span> <span class="st">"dnsr"</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="../reference/get_calibrated_dns_params.html">get_calibrated_dns_params()</a></code> wraps the whole path above
-into one call, from downloading data to returning simulation-ready
+<p><code><a href="../reference/get_calibrated_dns_params.html">get_calibrated_dns_params()</a></code> wraps the two-step path
+above into one call, from downloading data to returning simulation-ready
 parameters, for when the intermediate objects are not needed.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

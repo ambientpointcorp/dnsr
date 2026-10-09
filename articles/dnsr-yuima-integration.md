@@ -498,25 +498,26 @@ mean that happens to sit where the data is. $`\theta`$ inherits the
 problem, since the level a process reverts to is only identified if the
 reversion itself is.
 
-So the practical reading is that $`\sigma`$ and the correlation
-structure are the parts of these dynamics a short sample pins down;
-$`\kappa`$ and $`\theta`$ need either a long history or a prior.
+$`\sigma`$ and the correlation structure are therefore the parts of
+these dynamics that a short sample determines; $`\kappa`$ and $`\theta`$
+require either a long history or a prior.
 [`estimate_dns_dynamics()`](https://ambientpointcorp.github.io/dnsr/reference/estimate_dns_dynamics.md)
-reports standard errors and a half-life confidence interval for exactly
-this reason – see
-[`vignette("dns-model-introduction", package = "dnsr")`](https://ambientpointcorp.github.io/dnsr/articles/dns-model-introduction.md)
-– and the interval is usually wide enough to make the point on its own.
+reports standard errors and a half-life confidence interval for this
+reason; see
+[`vignette("dns-model-introduction", package = "dnsr")`](https://ambientpointcorp.github.io/dnsr/articles/dns-model-introduction.md).
 
-The same caution applies to the regression estimator, not just to QMLE.
-It is a property of the data, not of the method.
+The same applies to the regression estimator and to the one-step
+state-space estimator,
+[`estimate_dns_state_space()`](https://ambientpointcorp.github.io/dnsr/reference/estimate_dns_state_space.md).
+It is a property of the data rather than of the method.
 
-## Conclusion
+## Summary
 
-The integration of the YUIMA package enhances the `dnsr` package’s
-simulation capabilities, offering more accurate and robust stochastic
-simulations for the DNS model. This is particularly important for risk
-management, economic scenario generation, and interest rate modeling
-applications where precision matters.
+YUIMA provides the SDE simulation and the QMLE and GMM estimators used
+above. For factor simulation specifically, `engine = "exact"` samples
+the transition law directly and carries no discretisation error, so
+YUIMA is needed here for its estimation functions and its wider class of
+models rather than for simulation accuracy.
 
 Key advantages of using YUIMA for DNS simulations include:
 

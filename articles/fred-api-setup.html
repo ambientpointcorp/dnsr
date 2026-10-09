@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -200,13 +200,11 @@ instead of re-requesting:</p>
 <span>  start_date <span class="op">=</span> <span class="st">"2020-01-01"</span>,</span>
 <span>  cache_dir <span class="op">=</span> <span class="st">"~/.cache/dnsr-fred"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p>Two properties of the cache are worth knowing. Keys cover the series
-id and the requested date range only, so <strong>the API key is never
-part of a key and is never written to disk</strong>. And a cache hit is
-served <em>before</em> the key is looked up, which means a cached corpus
-can be replayed with no key configured at all – useful in CI, or for
-making an analysis reproducible by someone who has no key of their
-own.</p>
+<p>Two properties of the cache. Keys cover the series id and the
+requested date range only, so the API key is never part of a key and is
+never written to disk. And a cache hit is served before the key is
+looked up, so a cached corpus can be replayed with no key configured,
+which is useful in CI and for reproducing an analysis without a key.</p>
 <p>The cache never expires on its own. Delete the directory, or the file
 for one series, when you want fresh data; an open-ended
 <code>end_date</code> will otherwise keep returning the range you first
@@ -283,10 +281,10 @@ and DGS30 none between 2002 and 2006.</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Default: gaps take the value of the most recent earlier observation</span></span>
 <span><span class="va">yield_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_treasury_yield_combined.html">get_treasury_yield_combined</a></span><span class="op">(</span>start_date <span class="op">=</span> <span class="st">"1990-01-01"</span><span class="op">)</span></span></code></pre></div>
-<p>The direction matters more than it may appear. The frame is returned
+<p>The direction is significant. The frame is returned
 most-recent-first, so filling in row order would take each missing yield
-from a <em>later</em> date, putting information into the past that did
-not exist there – look-ahead bias in anything calibrated on the
+from a later date, placing information into the past that was not
+available then. That is look-ahead bias in anything calibrated on the
 result.</p>
 <p>For long histories, cap how far a value may be carried so a
 multi-year hole is not silently bridged:</p>

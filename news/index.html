@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,6 +39,21 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.0" id="dnsr-070">dnsr 0.7.0<a class="anchor" aria-label="anchor" href="#dnsr-070"></a></h2>
+<div class="section level3">
+<h3 id="one-step-state-space-estimation-0-7-0">One-step state-space estimation<a class="anchor" aria-label="anchor" href="#one-step-state-space-estimation-0-7-0"></a></h3>
+<p><code><a href="../reference/estimate_dns_state_space.html">estimate_dns_state_space()</a></code> fits the DNS model by maximum likelihood with a Kalman filter, treating the factors as an unobserved state rather than fitting them curve by curve and then modelling them. This is the state-space form of Diebold, Rudebusch and Aruoba (2006), as against the two-step approach of Diebold and Li (2006) that <code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> and <code><a href="../reference/estimate_dns_dynamics.html">estimate_dns_dynamics()</a></code> implement.</p>
+<p>The two-step estimator uses the fitted betas as data. They are estimates carrying sampling error, and using them as observed biases mean reversion upward. Filtering the factors propagates that uncertainty into the likelihood and estimates lambda jointly with the dynamics.</p>
+<p>The factor system is parameterised in continuous time, with the transition matrices derived from the exact Ornstein-Uhlenbeck law rather than estimated freely. The covariance is then positive semi-definite at every trial point, <code>kappa &gt; 0</code> makes the system stationary, and the result is accepted by <code><a href="../reference/dns_dynamics_to_sim_params.html">dns_dynamics_to_sim_params()</a></code> without conversion. The cost is that cross-factor terms cannot be represented; use <code>estimate_dns_dynamics(structure = "full")</code> on two-step betas for those.</p>
+<p>The result carries smoothed and filtered factors, measurement error by maturity, the log-likelihood with AIC and BIC, and the two-step estimates used as starting values. <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> and <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> methods report them.</p>
+<p>On the precision of the estimates, measured by simulating from a known state space and re-estimating: lambda, the shock volatilities and the measurement error are recovered to within 1 to 5 percent at 20, 40 and 100 years of monthly data, and the smoothed factors correlate above 0.99 with the simulated ones. The mean reversion speeds and long-run means are not: kappa for the level factor is 167 percent too high at 20 years, 77 percent at 40 and 58 percent at 100. The errors shrink as the sample grows, so this reflects the difficulty of estimating mean reversion rather than an error in the implementation, and it applies to the two-step route as well. <code><a href="../reference/estimate_dns_state_space.html">?estimate_dns_state_space</a></code> gives the full comparison.</p>
+</div>
+<div class="section level3">
+<h3 id="documentation-0-7-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-7-0"></a></h3>
+<p>Rhetorical phrasing removed from the documentation, comments and vignettes in favour of plain statements. The introduction vignette gains a section on one-step estimation and no longer lists the Kalman filter as absent.</p>
+</div>
+</div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.0" id="dnsr-060">dnsr 0.6.0<a class="anchor" aria-label="anchor" href="#dnsr-060"></a></h2>
 <p>The lambda search, and the default it starts from. Every function keeps its signature, its return structure and its class; the numbers move, because the old ones came from a search that was not searching and a default that placed the curvature hump past the end of most curves. Passing <code>initial_lambda = 0.0609, method = "optim"</code> reproduces the previous results.</p>
 <div class="section level3">
@@ -54,7 +69,7 @@
 </tr><tr><td><code>initial_lambda = 0.5124</code></td>
 <td>9.617 bp</td>
 <td>8.620 bp</td>
-</tr></tbody></table><p>Two consequences worth knowing. Warm starting in <code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> now changes speed rather than answers, because both chains reach the same optimum. And a search that moves can reach the degenerate small-lambda corner, where the level and slope loadings both tend to 1, the design goes collinear and the curvature factor runs to its bound; from the old 0.0609 default that happened on 6 of 72 month-ends. The next section is why.</p>
+</tr></tbody></table><p>Two consequences. Warm starting in <code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> now changes speed rather than answers, because both chains reach the same optimum. And a search that moves can reach the degenerate small-lambda corner, where the level and slope loadings both tend to 1, the design goes collinear and the curvature factor runs to its bound; from the old 0.0609 default that happened on 6 of 72 month-ends. The next section is why.</p>
 <p><code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> also gained a <code>control</code> argument, forwarded to <code><a href="https://rdrr.io/r/stats/optim.html" class="external-link">optim()</a></code>. It is appended to the signature, so positional calls are unaffected.</p>
 </div>
 <div class="section level3">
@@ -79,7 +94,7 @@
 </tr><tr><td>largest beta3</td>
 <td>2386 bp</td>
 <td>491 bp</td>
-</tr></tbody></table><p>The factor columns matter more than the fit column: at 0.0609 the factors were five times noisier day to day and beta3 reached 23.9 percentage points, because two of the three were not identified and wandered in offsetting directions. This package exists to estimate their dynamics, so that was the real cost.</p>
+</tr></tbody></table><p>The factor columns are the more consequential ones: at 0.0609 the factors were five times noisier day to day and beta3 reached 23.9 percentage points, because two of the three were not separately identified and moved in offsetting directions. The package estimates the dynamics of those factors.</p>
 <p>The ceiling on lambda rises from 0.5 to 2. At 0.5 it bound roughly a third of real month-end curves, and raising the default start made that worse before it made it better. Fitting the 72 month-ends in the bundled panel:</p>
 <table class="table"><thead><tr><th></th>
 <th>median fit error</th>
@@ -93,7 +108,7 @@
 </tr><tr><td>new default, new ceiling</td>
 <td>4.467 bp</td>
 <td>9 of 72</td>
-</tr></tbody></table><p>A clamped lambda is still reported through <code>at_bound</code> rather than silently. The ceiling is 2 rather than higher on purpose: lambda is a shape parameter, and factors estimated at different lambda are not on the same scale, so buying in-sample fit by letting it float freely costs the comparability across dates that the dynamics step depends on.</p>
+</tr></tbody></table><p>A clamped lambda is reported through <code>at_bound</code>. The ceiling is 2 rather than higher because lambda is a shape parameter: factors estimated at different lambda are not on the same scale, so a looser ceiling lowers in-sample error at the cost of comparability across dates, which the dynamics step requires.</p>
 </div>
 <div class="section level3">
 <h3 id="method--profile-searches-lambda-globally-0-6-0">method = “profile” searches lambda globally<a class="anchor" aria-label="anchor" href="#method--profile-searches-lambda-globally-0-6-0"></a></h3>
@@ -120,7 +135,7 @@
 </div>
 <div class="section level3">
 <h3 id="the-model-comparison-no-longer-understates-nelson-siegel-0-6-0">The model comparison no longer understates Nelson-Siegel<a class="anchor" aria-label="anchor" href="#the-model-comparison-no-longer-understates-nelson-siegel-0-6-0"></a></h3>
-<p><code><a href="../reference/compare_term_structure_models.html">compare_term_structure_models()</a></code> fits the Nelson-Siegel row with <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code>, so it inherited both defects above. On the bundled panel it reported 8.87 bp for Nelson-Siegel, behind the cubic spline’s 5.56; it now reports 4.43, ahead of it. Nothing about the comparison changed – the row was simply being fitted badly.</p>
+<p><code><a href="../reference/compare_term_structure_models.html">compare_term_structure_models()</a></code> fits the Nelson-Siegel row with <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code>, so it inherited both defects above. On the bundled panel it reported 8.87 bp for Nelson-Siegel, behind the cubic spline’s 5.56; it now reports 4.43, ahead of it. The comparison itself is unchanged; the row was being fitted with a poor lambda and a weak search.</p>
 <p>It gains <code>initial_lambda</code> and <code>method</code>, forwarded to <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> and appended to the signature, so the row is reproducible rather than merely better. The other rows take no search and are unaffected.</p>
 </div>
 <div class="section level3">

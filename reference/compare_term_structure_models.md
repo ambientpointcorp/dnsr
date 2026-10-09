@@ -60,16 +60,14 @@ compare_term_structure_models(
 
   Passed to
   [`fit_ns_model`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
-  for the "NS" row. They are exposed because the Nelson-Siegel row is
-  the only one whose fit depends on a search, and so the only one that
-  can be misrepresented by a weak one: before 0.6.0 this table reported
-  8.87 bp for Nelson-Siegel on the bundled panel, behind the cubic
-  spline's 5.56, purely because of the lambda default and the stopping
-  rule. It now reports 4.43, ahead of the spline. Passing
-  `initial_lambda = 0.0609, method = "optim"` restores the old
-  configuration, which reports 8.57 – near the old row but not identical
-  to it, because the objective is now scaled and the search therefore
-  stops in a different place.
+  for the "NS" row, which is the only row whose fit depends on a
+  numerical search. Before 0.6.0 this table reported 8.87 bp for
+  Nelson-Siegel on the bundled panel against the cubic spline's 5.56, a
+  difference attributable to the lambda default and the optimiser's
+  stopping rule rather than to the models. It now reports 4.43. Passing
+  `initial_lambda = 0.0609, method = "optim"` restores the earlier
+  configuration and reports 8.57, which differs from 8.87 because the
+  objective is now scaled and the search stops at a different point.
 
 ## Value
 
