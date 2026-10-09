@@ -118,6 +118,18 @@ unconstrained least squares, so it does not consult `lower_bounds` and
 `upper_bounds` for the betas and cannot return a beta resting on one. Only
 `lambda` is bounded under profiling.
 
+## The model comparison no longer understates Nelson-Siegel
+
+`compare_term_structure_models()` fits the Nelson-Siegel row with
+`fit_ns_model()`, so it inherited both defects above. On the bundled panel it
+reported 8.87 bp for Nelson-Siegel, behind the cubic spline's 5.56; it now
+reports 4.43, ahead of it. Nothing about the comparison changed -- the row was
+simply being fitted badly.
+
+It gains `initial_lambda` and `method`, forwarded to `fit_ns_model()` and
+appended to the signature, so the row is reproducible rather than merely
+better. The other rows take no search and are unaffected.
+
 # dnsr 0.5.0
 
 Documentation, plus one additive pair of helpers. No existing function changes

@@ -568,6 +568,29 @@ test_that("Smith-Wilson is skipped cleanly when its package is absent", {
   expect_equal(nrow(comparison$metrics), 1)
 })
 
+test_that("the Nelson-Siegel row of the comparison is controllable", {
+  # The NS row is the only one whose fit depends on a search, so it is the only
+  # one a weak search can misrepresent. It now leads the cubic spline on the
+  # bundled panel, where before 0.6.0 it trailed it.
+  default <- compare_term_structure_models(treasury_yields,
+                                           models = c("NS", "Spline"))
+  ns <- default$metrics$RMSE[default$metrics$Model == "Nelson-Siegel"]
+  spline <- default$metrics$RMSE[default$metrics$Model == "Cubic Spline"]
+  expect_lt(ns, spline)
+  expect_lt(ns, 5)
+
+  # And the old configuration is still reachable, which is what makes the
+  # comparison reproducible rather than merely better.
+  old <- suppressWarnings(compare_term_structure_models(
+    treasury_yields, models = c("NS", "Spline"),
+    initial_lambda = 0.0609, method = "optim"
+  ))
+  expect_gt(old$metrics$RMSE[old$metrics$Model == "Nelson-Siegel"], ns)
+
+  # The spline row does not depend on either argument.
+  expect_equal(old$metrics$RMSE[old$metrics$Model == "Cubic Spline"], spline)
+})
+
 test_that("SmithWilson is opt-in and its arguments are appended", {
   args <- names(formals(compare_term_structure_models))
   expect_equal(args[1:4],

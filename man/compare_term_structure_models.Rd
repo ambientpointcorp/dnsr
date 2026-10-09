@@ -11,7 +11,9 @@ compare_term_structure_models(
   spline_df = 5,
   units = c("bp", "decimal"),
   ufr = NULL,
-  alpha = 0.1
+  alpha = 0.1,
+  initial_lambda = ns_lambda(3.5),
+  method = c("profile", "optim")
 )
 }
 \arguments{
@@ -36,6 +38,17 @@ its extrapolation converges to beyond the last observed maturity. Defaults
 to the longest observed yield.}
 
 \item{alpha}{Numeric. Smith-Wilson convergence speed toward \code{ufr}.}
+
+\item{initial_lambda, method}{Passed to \code{\link{fit_ns_model}} for the
+"NS" row. They are exposed because the Nelson-Siegel row is the only one
+whose fit depends on a search, and so the only one that can be
+misrepresented by a weak one: before 0.6.0 this table reported 8.87 bp for
+Nelson-Siegel on the bundled panel, behind the cubic spline's 5.56, purely
+because of the lambda default and the stopping rule. It now reports 4.43,
+ahead of the spline. Passing \code{initial_lambda = 0.0609,
+  method = "optim"} restores the old configuration, which reports 8.57 --
+near the old row but not identical to it, because the objective is now
+scaled and the search therefore stops in a different place.}
 }
 \value{
 A list containing:

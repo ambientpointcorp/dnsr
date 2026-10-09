@@ -1273,6 +1273,16 @@ plot_yield_pca <- function(yield_data, n_components = 3,
 #'   maturities. "SmithWilson" needs the \pkg{SmithWilsonYieldCurve} package
 #'   and is an interpolation rather than a fit; see Details.
 #' @param spline_df Integer. Degrees of freedom for spline model.
+#' @param initial_lambda,method Passed to \code{\link{fit_ns_model}} for the
+#'   "NS" row. They are exposed because the Nelson-Siegel row is the only one
+#'   whose fit depends on a search, and so the only one that can be
+#'   misrepresented by a weak one: before 0.6.0 this table reported 8.87 bp for
+#'   Nelson-Siegel on the bundled panel, behind the cubic spline's 5.56, purely
+#'   because of the lambda default and the stopping rule. It now reports 4.43,
+#'   ahead of the spline. Passing \code{initial_lambda = 0.0609,
+#'   method = "optim"} restores the old configuration, which reports 8.57 --
+#'   near the old row but not identical to it, because the objective is now
+#'   scaled and the search therefore stops in a different place.
 #' @param ufr Numeric. Ultimate forward rate for the Smith-Wilson curve, which
 #'   its extrapolation converges to beyond the last observed maturity. Defaults
 #'   to the longest observed yield.
@@ -1331,7 +1341,9 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
                                           models = c("NS", "NSS", "Spline"),
                                           spline_df = 5,
                                           units = c("bp", "decimal"),
-                                          ufr = NULL, alpha = 0.1) {
+                                          ufr = NULL, alpha = 0.1,
+                                          initial_lambda = ns_lambda(3.5),
+                                          method = c("profile", "optim")) {
   # Parameter validation
   units <- match.arg(units)
   checkmate::assert_data_frame(yield_data)
@@ -1405,7 +1417,9 @@ compare_term_structure_models <- function(yield_data, date_to_compare = NULL,
 
   # Fit Nelson-Siegel model if requested
   if ("NS" %in% models) {
-    ns_result <- fit_ns_model(maturities, yields)
+    ns_result <- fit_ns_model(maturities, yields,
+                              initial_lambda = initial_lambda,
+                              method = method)
 
     # fit_ns_model() drops points it could not use, so place the fitted values
     # back onto the full maturity grid by index.
