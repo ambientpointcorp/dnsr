@@ -181,10 +181,7 @@ print.dns_simulation <- function(x, ...) {
 }
 
 
-#' @title Print a one-step DNS state-space fit
-#' @param x A \code{dns_state_space} object.
-#' @param ... Ignored.
-#' @return \code{x}, invisibly.
+#' @rdname dns-methods
 #' @export
 print.dns_state_space <- function(x, ...) {
   cat("DNS one-step state-space fit (Kalman filter, maximum likelihood)\n")
@@ -223,16 +220,7 @@ print.dns_state_space <- function(x, ...) {
   invisible(x)
 }
 
-#' @title Summarise a one-step DNS state-space fit
-#'
-#' @description
-#' Reports the shock correlation matrix, the measurement error and residual
-#' error by maturity, and the two-step estimates alongside the one-step ones.
-#'
-#' @param object A \code{dns_state_space} object.
-#' @param ... Ignored.
-#' @return A list with class \code{"summary.dns_state_space"}, invisibly
-#'   printed.
+#' @rdname dns-methods
 #' @export
 summary.dns_state_space <- function(object, ...) {
   comparison <- NULL
@@ -260,10 +248,7 @@ summary.dns_state_space <- function(object, ...) {
   out
 }
 
-#' @title Print a one-step DNS state-space summary
-#' @param x A \code{summary.dns_state_space} object.
-#' @param ... Ignored.
-#' @return \code{x}, invisibly.
+#' @rdname dns-methods
 #' @export
 print.summary.dns_state_space <- function(x, ...) {
   print(x$fit)

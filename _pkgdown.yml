@@ -27,6 +27,7 @@ reference:
     desc: Estimate the Ornstein-Uhlenbeck dynamics of the fitted factors.
     contents:
       - estimate_dns_dynamics
+      - estimate_dns_state_space
       - dns_dynamics_to_sim_params
       - get_calibrated_dns_params
       - estimate_dns_parameters_yuima

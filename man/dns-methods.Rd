@@ -8,6 +8,9 @@
 \alias{print.summary.dns_fit}
 \alias{print.dns_dynamics}
 \alias{print.dns_simulation}
+\alias{print.dns_state_space}
+\alias{summary.dns_state_space}
+\alias{print.summary.dns_state_space}
 \title{Print and Summary Methods for DNS Objects}
 \usage{
 \method{print}{ns_fit}(x, ...)
@@ -21,6 +24,12 @@
 \method{print}{dns_dynamics}(x, ...)
 
 \method{print}{dns_simulation}(x, ...)
+
+\method{print}{dns_state_space}(x, ...)
+
+\method{summary}{dns_state_space}(object, ...)
+
+\method{print}{summary.dns_state_space}(x, ...)
 }
 \arguments{
 \item{x}{An object returned by the corresponding dnsr function.}
