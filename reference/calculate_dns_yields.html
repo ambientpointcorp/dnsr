@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,7 +63,10 @@
 
 
 <dt id="arg-lambda">lambda<a class="anchor" aria-label="anchor" href="#arg-lambda"></a></dt>
-<dd><p>Numeric. DNS decay parameter lambda.</p></dd>
+<dd><p>Numeric. DNS decay parameter lambda, per unit of maturity.
+Maturities here are in years, so the 0.0609 default is the Diebold-Li
+value for maturities in months and places the curvature hump at 29.4
+years rather than months; see <code><a href="ns_lambda.html">ns_lambda</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

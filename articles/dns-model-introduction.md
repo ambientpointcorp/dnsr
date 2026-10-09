@@ -57,7 +57,45 @@ where
 
 The loadings are what give each factor its interpretation: the level
 loads equally on every maturity, the slope loads most at the short end
-and decays to zero, and the curvature peaks in the middle of the curve.
+and decays to zero, and the curvature peaks somewhere in the middle.
+
+### A word about lambda, because its units matter
+
+$`\lambda`$ appears only as the product $`\lambda m`$, so it is measured
+per unit of maturity. Its numerical value therefore depends on whether
+maturities are years or months, and nothing about a $`\lambda`$ on its
+own tells you which. **Every function in this package takes maturities
+in years.**
+
+This is worth labouring because the conventional value is a trap.
+Diebold and Li chose $`\lambda = 0.0609`$ working in *months*, where it
+places the curvature hump just short of 30 months. That is the number
+this package uses as a default, and in years it means something quite
+different:
+
+``` r
+
+ns_curvature_peak(0.0609)   # where the hump sits, in the maturity's own units
+#> [1] 29.44634
+```
+
+Twenty-nine years, which is off the end of most curves: the “curvature”
+factor is then doing almost nothing a level factor could not.
+[`ns_lambda()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md)
+goes the other way, from the maturity you want the hump at to the decay
+that puts it there:
+
+``` r
+
+ns_lambda(2.5)   # a hump at two and a half years
+#> [1] 0.7173128
+ns_lambda(30)    # the Diebold-Li criterion, in the months they worked in
+#> [1] 0.05977607
+```
+
+So the honest reading of `0.0609` is that it is right for
+month-denominated maturities and merely conventional here. Compare the
+two:
 
 ``` r
 
@@ -66,14 +104,43 @@ plot_dns_loadings(lambda = 0.0609)
 
 ![](dns-model-introduction_files/figure-html/loadings-1.png)
 
-Raising $`\lambda`$ pulls the curvature hump toward shorter maturities:
-
 ``` r
 
-plot_dns_loadings(lambda = 0.4)
+plot_dns_loadings(lambda = ns_lambda(2.5))
 ```
 
 ![](dns-model-introduction_files/figure-html/loadings_fast-1.png)
+
+The first has no hump to speak of inside thirty years. The second is the
+shape the three-factor story describes.
+
+This is not a cosmetic point. At $`\lambda = 0.0609`$ the *slope*
+loading only falls from 0.992 at three months to 0.749 at ten years –
+nearly flat, and so nearly collinear with the level loading, which is 1
+everywhere. The two factors stop being separately identified, and
+$`\beta_2`$ stops behaving like a slope at all. Fitting the same panel
+both ways and comparing $`\beta_2`$ with the spread the market quotes:
+
+| $`\lambda`$ | hump at | cor($`\beta_2`$, 3m-10y) | same sign | median fit |
+|------------:|--------:|-------------------------:|----------:|-----------:|
+|      0.0609 |  29.5 y |               **-0.929** |    **5%** |    23.0 bp |
+|       0.448 |   4.0 y |               **+0.941** |   **90%** |     5.3 bp |
+
+At the default the slope factor is *anti*-correlated with the slope, and
+carries the right sign on one date in twenty. That is the cost of the
+unit mismatch, and it is why the rest of this vignette fixes $`\lambda`$
+somewhere sensible rather than at the default.
+
+Two cautions before leaning on
+[`ns_lambda()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
+The peak is flat – at half or double the nominal peak maturity the
+curvature loading is still about 85 percent of its maximum – so
+$`\lambda`$ is not tightly pinned by this choice and the precision of
+the number is misleading. And $`\lambda`$ sets the slope loading’s decay
+at the same time, which is often the more consequential effect: a hump
+at 2.5 years leaves the slope loading at 0.53 by two years, a hump at 10
+years leaves it at 0.84. Where $`\lambda`$ can be estimated rather than
+chosen, estimate it.
 
 ## Dynamic Extension
 
@@ -158,18 +225,23 @@ series, which is precisely what the next step needs them to be.
 Standard DNS practice, following Diebold and Li, therefore fixes
 $`\lambda`$ at a single value for the whole panel. It costs
 cross-sectional fit – about 14 basis points median here against 7 with
-$`\lambda`$ free – and buys factors that can be modelled over time:
+$`\lambda`$ free – and buys factors that can be modelled over time.
+
+`ns_lambda(4)` puts the curvature hump at four years, which is about
+where this panel wants it, and keeps the loadings distinct enough for
+the factors to mean what they are called:
 
 ``` r
 
 recent <- fit_dns_model(treasury_yields, n_days = 250, show_progress = FALSE,
-                        lambda_constraint = "fixed", initial_lambda = 0.0609)
+                        lambda_constraint = "fixed",
+                        initial_lambda = ns_lambda(4))
 recent
 #> Dynamic Nelson-Siegel fit
 #>   250 curves, 2024-01-02 to 2024-12-31
 #>   maturities         0.0833  0.2500  0.5000  1.0000  2.0000  3.0000  5.0000  7.0000 10.0000 20.0000 30.0000
-#>   rmse              23.01 bp median, 42.01 bp worst
-#>   lambda            0.0609 median
+#>   rmse              5.28 bp median, 12.08 bp worst
+#>   lambda            0.4483 median
 #>   success rate      100.0%
 ```
 
@@ -184,14 +256,14 @@ summary(recent)
 #> 
 #> Factors:
 #>             min     mean      max      sd
-#> beta1   0.04832  0.10658  0.14015 0.02229
-#> beta2  -0.09104 -0.05679 -0.00534 0.02056
-#> beta3  -0.18200 -0.11474  0.00968 0.04603
-#> lambda  0.06090  0.06090  0.06090 0.00000
+#> beta1   0.04314  0.04649  0.05018 0.00135
+#> beta2  -0.00663  0.00680  0.01352 0.00484
+#> beta3  -0.04876 -0.02768 -0.00824 0.01029
+#> lambda  0.44832  0.44832  0.44832 0.00000
 #> 
 #> Fit error (basis points):
 #>    0%   50%   95%  100% 
-#>  5.71 23.01 39.97 42.01
+#>  3.43  5.28 10.24 12.08
 ```
 
 Fitted curves against the observations:
@@ -220,6 +292,83 @@ factor_plots$rmse
 
 ![](dns-model-introduction_files/figure-html/plot_rmse-1.png)
 
+### Do the factors mean what they claim?
+
+The three factors are supposed to be level, slope and curvature. That is
+checkable, and worth checking before anything is built on them. The
+slope factor should track the spread the market actually quotes:
+
+``` r
+
+aligned <- treasury_yields[match(recent$parameters$Date, treasury_yields$Date), ]
+observed_spread <- aligned[["0.25"]] - aligned[["10"]]
+
+c(
+  correlation = cor(recent$parameters$beta2, observed_spread),
+  same_sign = mean(sign(recent$parameters$beta2) == sign(observed_spread))
+)
+#> correlation   same_sign 
+#>   0.9410184   0.9040000
+```
+
+Closely, and with the sign the algebra predicts: the slope loading is 1
+at the short end and decays to zero, so
+$`y(\text{short}) \approx \beta_1 + \beta_2`$ and
+$`y(\text{long}) \approx \beta_1`$, which makes $`\beta_2`$ the
+short-minus-long spread. A positive $`\beta_2`$ is an inverted curve.
+
+And the level factor should look like the policy cycle:
+
+``` r
+
+range(recent$parameters$beta1)
+#> [1] 0.04314035 0.05018489
+```
+
+### Where a three-factor curve runs out
+
+The median fit error is a summary; the structure of the residuals says
+more. Three factors cannot bend arbitrarily, and the place they struggle
+is predictable:
+
+``` r
+
+fitted_rows <- recent$fitted_yields
+residual <- as.matrix(aligned[, -1]) - fitted_rows
+
+data.frame(
+  maturity = as.numeric(colnames(fitted_rows)),
+  mean_bp = round(colMeans(residual, na.rm = TRUE) * 10000, 1),
+  rmse_bp = round(sqrt(colMeans(residual^2, na.rm = TRUE)) * 10000, 1)
+)
+#>        maturity mean_bp rmse_bp
+#> 0.0833   0.0833     0.1     7.9
+#> 0.25     0.2500     3.3     5.0
+#> 0.5      0.5000     1.1     6.1
+#> 1        1.0000    -4.7     8.5
+#> 2        2.0000    -2.7     5.5
+#> 3        3.0000    -0.5     1.9
+#> 5        5.0000     1.5     4.3
+#> 7        7.0000     3.1     5.0
+#> 10      10.0000    -1.2     3.2
+#> 20      20.0000     8.6     8.7
+#> 30      30.0000    -8.7     9.4
+```
+
+The errors are not spread evenly. The middle of the curve, where the
+curvature factor is doing its work, fits to a couple of basis points;
+the two ends are three to five times worse, and the long end carries a
+visible bias – twenty years is fitted low and thirty high, the signature
+of a single exponential decay being asked to describe a curve that
+flattens faster than it can. The one-month point is poorly fitted for a
+different reason: it is barely on the same curve as the rest, and no
+three-factor shape passes through both the bill market and the
+thirty-year.
+
+Which end matters is a property of your application, not of the model.
+If you are discounting long cashflows, the median RMSE is the wrong
+summary to be reassured by.
+
 ## Estimating Factor Dynamics
 
 [`estimate_dns_dynamics()`](https://ambientpointcorp.github.io/dnsr/reference/estimate_dns_dynamics.md)
@@ -243,7 +392,7 @@ month_ends <- treasury_yields[
 monthly_fit <- fit_dns_model(month_ends, n_days = nrow(month_ends),
                              show_progress = FALSE, warm_start = FALSE,
                              lambda_constraint = "fixed",
-                             initial_lambda = 0.0609)
+                             initial_lambda = ns_lambda(4))
 
 dynamics <- estimate_dns_dynamics(monthly_fit$parameters)
 dynamics
@@ -253,11 +402,11 @@ dynamics
 #>   structure        diagonal
 #> 
 #>                 kappa se_kappa   theta  sigma half_life_y
-#> level (b1)     0.6667   0.4748  0.0492 0.0620      1.0397
-#> slope (b2)     1.2032   0.6338 -0.0215 0.0594      0.5761
-#> curvature (b3) 0.8292   0.5299 -0.0181 0.1243      0.8360
+#> level (b1)     0.0604   0.3379  0.0862 0.0088     11.4707
+#> slope (b2)     0.3534   0.3484 -0.0058 0.0114      1.9614
+#> curvature (b3) 1.5237   0.7038 -0.0150 0.0306      0.4549
 #> 
-#>   stable           TRUE (eigenvalues 1.203 0.829 0.667)
+#>   stable           TRUE (eigenvalues 1.524 0.353 0.060)
 ```
 
 The standard errors are worth reading before anything is built on
@@ -267,14 +416,14 @@ and the half-life interval says so:
 ``` r
 
 dynamics$beta1$se
-#>      kappa      theta      sigma 
-#> 0.47482691 0.03849805 0.00527441
+#>        kappa        theta        sigma 
+#> 0.3378614464 0.3157739879 0.0007482356
 dynamics$beta1$t_value
-#>    kappa    theta 
-#> 1.404094 1.276968
+#>     kappa     theta 
+#> 0.1788525 0.2730089
 dynamics$beta1$half_life_ci
-#>    lower    upper 
-#> 0.433937      Inf
+#>     lower     upper 
+#> 0.9592091       Inf
 ```
 
 $`\kappa`$ also carries a well-known upward small-sample bias of order
@@ -287,9 +436,9 @@ Factor innovations are correlated, and the simulation uses that:
 
 round(dynamics$correlation, 3)
 #>        beta1  beta2  beta3
-#> beta1  1.000 -0.980 -0.986
-#> beta2 -0.980  1.000  0.974
-#> beta3 -0.986  0.974  1.000
+#> beta1  1.000 -0.548  0.132
+#> beta2 -0.548  1.000 -0.302
+#> beta3  0.132 -0.302  1.000
 ```
 
 ### A full mean-reversion matrix
@@ -303,9 +452,9 @@ pulls the others:
 full <- estimate_dns_dynamics(monthly_fit$parameters, structure = "full")
 round(full$kappa_matrix, 3)
 #>        beta1  beta2  beta3
-#> beta1 -2.615 -6.952  0.802
-#> beta2  2.334  5.767 -0.623
-#> beta3  7.148 12.107  0.141
+#> beta1  0.436 -0.494 -0.391
+#> beta2 -1.190  0.866 -0.843
+#> beta3  0.921  0.634  1.674
 ```
 
 The eigenvalues of that matrix decide whether the system is stable,
@@ -315,10 +464,54 @@ matter:
 ``` r
 
 round(Re(full$eigenvalues), 3)
-#> [1] 1.401 1.401 0.490
+#> [1] 1.175 1.175 0.627
 full$system_stability
 #> [1] TRUE
 ```
+
+## Is the Fit Trustworthy?
+
+The package reports its own reliability in several places, and they are
+easy to miss because each one lives on a different object. Worth
+checking all of them before using a calibration:
+
+``` r
+
+# 1. Did every cross-section fit at all?
+recent$success_rate
+#> [1] 100
+nrow(recent$failures)
+#> [1] 0
+
+# 2. Did any fit come to rest on a bound? Those factor decompositions are not
+#    identified, however good their RMSE looks.
+colSums(recent$at_bound)
+#>  beta1  beta2  beta3 lambda 
+#>      0      0      0      0
+
+# 3. How bad is the worst curve, not just the median?
+round(quantile(recent$parameters$rmse * 10000, c(0.5, 0.95, 1)), 2)
+#>   50%   95%  100% 
+#>  5.28 10.24 12.08
+
+# 4. Is the estimated factor system actually mean reverting?
+dynamics$system_stability
+#> [1] TRUE
+round(Re(dynamics$eigenvalues), 3)
+#> [1] 1.524 0.353 0.060
+
+# 5. How well identified is the reversion speed?
+dynamics$beta1$half_life_ci
+#>     lower     upper 
+#> 0.9592091       Inf
+```
+
+Taken together: a high success rate with no bound hits, a tolerable
+worst-case RMSE, a stable system, and a half-life interval you would be
+willing to quote. If the half-life interval runs to infinity, as it does
+on this six-year sample, $`\kappa`$ is not identified and any simulation
+horizon longer than the sample is an extrapolation of something the data
+did not pin down.
 
 ## Simulating Future Yield Curves
 
@@ -348,10 +541,10 @@ simulation
 #> DNS simulation
 #>   500 paths, 60 steps over 5 years
 #>   engine           exact
-#>   terminal factors 0.0482  -0.0203  -0.0152
-#>     (sd)           0.0558  0.0402  0.1008
+#>   terminal factors 0.0597  -0.0065  -0.0145
+#>     (sd)           0.0177  0.0135  0.0173
 #>   maturities        0.0833  0.2500  0.5000  1.0000  2.0000  3.0000  5.0000  7.0000 10.0000 20.0000 30.0000
-#>   terminal yields  2.79  2.79  2.80  2.81  2.82  2.84  2.88  2.92  2.99  3.22  3.43 (% mean)
+#>   terminal yields  5.32  5.31  5.31  5.30  5.28  5.26  5.23  5.21  5.19  5.18  5.24 (% mean)
 ```
 
 Simulated curves at a few horizons. The facets follow the calendar
@@ -493,6 +686,29 @@ so it nests Nelson-Siegel and must fit at least as well; the question is
 whether the two extra parameters are worth it. A smoothing spline will
 generally beat both on in-sample error while saying nothing about the
 shape, which is the trade the parametric models exist to make.
+
+## What This Package Does Not Do
+
+Two limits are worth stating plainly, because they are choices rather
+than omissions.
+
+**It estimates in two steps, not one.** Each cross-section is fitted,
+and then the resulting factors are treated as data for a time-series
+model. Diebold, Rudebusch and Aruoba cast the same model as a
+state-space system and estimate everything at once with a Kalman filter,
+which propagates the cross-sectional uncertainty into the dynamics
+instead of discarding it, and handles missing maturities naturally. The
+two-step approach is simpler, much faster, and what the original
+Diebold-Li paper used; it is also why the standard errors here describe
+the factor regressions and not the factors’ own measurement error.
+
+**It carries no arbitrage-free restriction.** Nelson-Siegel is a
+flexible curve, not a term structure model derived from a no-arbitrage
+condition, so nothing stops a fitted or simulated curve implying
+arbitrage. The arbitrage-free variant, AFNS, adds a yield-adjustment
+term that pins the dynamics and the cross-section together. If you are
+pricing derivatives off these curves rather than discounting cashflows,
+that distinction matters.
 
 ## Where to Go Next
 

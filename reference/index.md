@@ -21,6 +21,9 @@ Fetch and assemble yield curve panels from FRED.
 
 Fit the Nelson-Siegel curve to one date, or to a panel of dates.
 
+- [`ns_lambda()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md)
+  [`ns_curvature_peak()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md)
+  : Choose the Nelson-Siegel Decay from the Curvature Peak
 - [`fit_ns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
   : Dynamic Nelson-Siegel Model Implementation
 - [`fit_dns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_dns_model.md)

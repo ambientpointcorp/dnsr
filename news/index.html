@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,49 @@
       <small>Source: <a href="https://github.com/ambientpointcorp/dnsr/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.5.0" id="dnsr-050">dnsr 0.5.0<a class="anchor" aria-label="anchor" href="#dnsr-050"></a></h2>
+<p>Documentation, plus one additive pair of helpers. No existing function changes what it computes.</p>
+<div class="section level3">
+<h3 id="the-lambda-units-and-why-they-matter-more-than-they-look-0-5-0">The lambda units, and why they matter more than they look<a class="anchor" aria-label="anchor" href="#the-lambda-units-and-why-they-matter-more-than-they-look-0-5-0"></a></h3>
+<p><code>lambda</code> is measured per unit of maturity, and every function here takes maturities in <strong>years</strong>. The 0.0609 default is the value Diebold and Li published for maturities in <strong>months</strong>, where it places the curvature hump just short of 30 months. In years the same number places it at 29.4 – off the end of most curves.</p>
+<p>That was documented nowhere, and the consequence is larger than a misplaced hump. At <code>lambda = 0.0609</code> the <em>slope</em> loading falls only from 0.992 at three months to 0.749 at ten years: nearly flat, and so nearly collinear with the level loading, which is 1 everywhere. The two factors stop being separately identified. Fitting the bundled panel both ways and comparing <code>beta2</code> against the 3-month minus 10-year spread the market quotes:</p>
+<table class="table"><thead><tr><th align="right">lambda</th>
+<th align="right">hump at</th>
+<th align="right">cor(beta2, 3m-10y)</th>
+<th align="right">same sign</th>
+<th align="right">median fit</th>
+</tr></thead><tbody><tr><td align="right">0.0609</td>
+<td align="right">29.5 y</td>
+<td align="right">-0.929</td>
+<td align="right">5%</td>
+<td align="right">23.0 bp</td>
+</tr><tr><td align="right">0.448</td>
+<td align="right">4.0 y</td>
+<td align="right">+0.941</td>
+<td align="right">90%</td>
+<td align="right">5.3 bp</td>
+</tr></tbody></table><p>At the default the slope factor is anti-correlated with the slope and carries the right sign on one date in twenty.</p>
+<p><strong>The default is unchanged</strong>, because changing it would alter every existing call, and because there is no single right value to substitute: 0.73 reproduces the Diebold-Li criterion in year units, while this panel prefers about 0.45. What changes is that the units are now stated wherever lambda is documented, and there is a way to reason about it:</p>
+<ul><li>
+<p>New <code><a href="../reference/ns_lambda.html">ns_lambda()</a></code> and <code><a href="../reference/ns_lambda.html">ns_curvature_peak()</a></code> convert between a decay and the maturity at which its curvature loading peaks, which is the quantity a reader can actually judge. <code>ns_lambda(2.5)</code> describes the same curve shape whether maturities are years or months, because the caller states the maturity in their own units. <code>ns_curvature_peak(0.0609)</code> reports 29.4, which is how the mismatch becomes visible.</p>
+<p>Documented with its two caveats: the peak is flat, so lambda is not tightly determined by this choice, and lambda sets the slope loading’s decay at the same time, which is often the more consequential effect.</p>
+</li>
+<li><p><code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code>’s documentation now says that with <code>method = "optim"</code> the search over lambda is weak – L-BFGS-B’s numerical gradient is poorly scaled when the betas are near 0.05 and lambda near 0.5, and lambda moves very little from its starting value even unconstrained – while <code>method = "profile"</code> searches it properly and reaches the same optimum from any start.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="vignettes-0-5-0">Vignettes<a class="anchor" aria-label="anchor" href="#vignettes-0-5-0"></a></h3>
+<ul><li>The introduction now explains the lambda units with the measurement above, fixes lambda at <code>ns_lambda(4)</code> for its panel work rather than at the default, and gains three sections: whether the factors mean what they are called (<code>beta2</code> against the quoted spread), where a three-factor curve runs out (residuals by maturity, from 1.9 basis points in the middle to 9.4 at the long end, with twenty years fitted low and thirty high), and a checklist for deciding whether a fit is trustworthy that gathers <code>success_rate</code>, <code>failures</code>, <code>at_bound</code>, <code>system_stability</code> and <code>half_life_ci</code> into one place.</li>
+<li>A section on what the package does not do: it estimates in two steps rather than as a state-space system with a Kalman filter, so the standard errors describe the factor regressions and not the factors’ own measurement error; and it carries no arbitrage-free restriction, which matters if curves are being used to price derivatives rather than discount cashflows.</li>
+<li>
+<code>README.md</code> tabulates the whole exported surface, not just the plots. <code><a href="../reference/dns_zero_prices.html">dns_zero_prices()</a></code> had appeared nowhere in it.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="removed-0-5-0">Removed<a class="anchor" aria-label="anchor" href="#removed-0-5-0"></a></h3>
+<ul><li>
+<code>dnsr-package-summary.Rmd</code>, which carried vignette metadata but sat in the repository root, was <code>.Rbuildignore</code>d, and was therefore never built, shipped or checked. It duplicated <code>README.md</code> and had rotted unnoticed – it still documented <code>animate_yield_curves()</code>, removed long ago, and listed none of the functions added since. The only thing referencing it was a stale local <code>docs/</code> build.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.3" id="dnsr-043">dnsr 0.4.3<a class="anchor" aria-label="anchor" href="#dnsr-043"></a></h2>
 <ul><li>

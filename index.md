@@ -211,6 +211,23 @@ represents the long-term level of interest rates - $`\beta_2`$
 represents the yield curve slope - $`\beta_3`$ represents the
 curvature - $`\lambda`$ controls the decay rate of factor loadings
 
+`λ` is measured *per unit of maturity*, and every function here takes
+maturities in **years**. The conventional 0.0609 comes from Diebold and
+Li, who worked in **months**, where it places the curvature hump just
+short of 30 months; in years the same number puts it at 29.4. It remains
+this package’s default for continuity, but
+[`ns_lambda()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md)
+and
+[`ns_curvature_peak()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md)
+convert between a decay and the maturity its hump sits at, so the choice
+can be stated in terms you can check:
+
+``` r
+
+ns_curvature_peak(0.0609)   # 29.4 -- in years, the hump is off the curve
+ns_lambda(2.5)              # 0.717 -- a hump at two and a half years
+```
+
 In the dynamic extension, the factors $`\beta_1`$, $`\beta_2`$, and
 $`\beta_3`$ are modeled as mean-reverting Ornstein-Uhlenbeck processes:
 
@@ -241,6 +258,26 @@ maturities, 2 January 2019 to 31 December 2024, in decimal form. The
 source is FRED’s H.15 constant maturity series (`DGS1MO` through
 `DGS30`), which are U.S. government works in the public domain.
 `data-raw/treasury_yields.R` rebuilds it.
+
+## Fitting, Dynamics and Pricing
+
+| Function | Does |
+|:---|:---|
+| [`fit_ns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md) | Fit one cross-section; `method = "profile"` solves the betas in closed form |
+| [`fit_dns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_dns_model.md) | Fit a panel, selecting the window by date |
+| [`ns_lambda()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md), [`ns_curvature_peak()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md) | Convert between the decay and the maturity its curvature hump sits at |
+| [`estimate_dns_dynamics()`](https://ambientpointcorp.github.io/dnsr/reference/estimate_dns_dynamics.md) | Factor dynamics, diagonal or as a full VAR(1), with standard errors |
+| [`dns_dynamics_to_sim_params()`](https://ambientpointcorp.github.io/dnsr/reference/dns_dynamics_to_sim_params.md) | Package dynamics for the simulator |
+| [`get_calibrated_dns_params()`](https://ambientpointcorp.github.io/dnsr/reference/get_calibrated_dns_params.md) | Download, fit and return simulation-ready parameters in one call |
+| [`simulate_dns_factors()`](https://ambientpointcorp.github.io/dnsr/reference/simulate_dns_factors.md), [`simulate_dns_yield_curves()`](https://ambientpointcorp.github.io/dnsr/reference/simulate_dns_yield_curves.md) | Project forward, via YUIMA or the exact transition law |
+| [`calculate_dns_yields()`](https://ambientpointcorp.github.io/dnsr/reference/calculate_dns_yields.md), [`calculate_dns_forwards()`](https://ambientpointcorp.github.io/dnsr/reference/calculate_dns_forwards.md) | Curves and instantaneous forwards from factors |
+| [`dns_discount_factors()`](https://ambientpointcorp.github.io/dnsr/reference/dns_discount_factors.md), [`dns_zero_prices()`](https://ambientpointcorp.github.io/dnsr/reference/dns_zero_prices.md), [`dns_par_yields()`](https://ambientpointcorp.github.io/dnsr/reference/dns_par_yields.md) | Discount off a fitted curve |
+| [`compare_term_structure_models()`](https://ambientpointcorp.github.io/dnsr/reference/compare_term_structure_models.md) | Nelson-Siegel against Svensson, a spline and Smith-Wilson on one date |
+| [`dns_to_yuima_model()`](https://ambientpointcorp.github.io/dnsr/reference/dns_to_yuima_model.md), [`estimate_dns_parameters_yuima()`](https://ambientpointcorp.github.io/dnsr/reference/estimate_dns_parameters_yuima.md) | A YUIMA model object, and QMLE on the factors |
+| [`fetch_fred_series()`](https://ambientpointcorp.github.io/dnsr/reference/fetch_fred_series.md), [`get_treasury_yield_data()`](https://ambientpointcorp.github.io/dnsr/reference/get_treasury_yield_data.md), [`get_treasury_yield_combined()`](https://ambientpointcorp.github.io/dnsr/reference/get_treasury_yield_combined.md) | Treasury data from FRED, with retries and caching |
+
+`treasury_yields` is the bundled panel: 1,501 daily curves across eleven
+maturities, 2019 to 2024.
 
 ## Documentation
 

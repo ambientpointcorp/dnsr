@@ -33,7 +33,12 @@ fit_ns_model(
 
 - initial_lambda:
 
-  Numeric. Initial value for the decay parameter lambda.
+  Numeric. Initial value for the decay parameter lambda, per unit of
+  maturity, and the value used outright when
+  `lambda_constraint = "fixed"`. Maturities here are in years, so the
+  0.0609 default is the Diebold-Li value for maturities in months and
+  places the curvature hump at 29.4 years rather than months; see
+  [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
 
 - lambda_constraint:
 
@@ -44,6 +49,14 @@ fit_ns_model(
   - "constrained": lambda is optimized within bounds.
 
   - "free": lambda is optimized without constraints.
+
+  With `method = "optim"` the search over lambda is weak: L-BFGS-B's
+  numerical gradient is poorly scaled when the betas are around 0.05 and
+  lambda around 0.5, and in practice lambda moves very little from
+  `initial_lambda` even when unconstrained. `method = "profile"`
+  searches lambda properly and reaches the same optimum from any
+  starting value, so prefer it when lambda is meant to be estimated
+  rather than supplied.
 
 - lower_bounds:
 

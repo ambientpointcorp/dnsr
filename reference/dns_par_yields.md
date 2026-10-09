@@ -23,7 +23,11 @@ dns_par_yields(factors, maturities, lambda = 0.0609, frequency = 2)
 
 - lambda:
 
-  Numeric. DNS decay parameter lambda.
+  Numeric. DNS decay parameter lambda, per unit of maturity. Maturities
+  here are in years, so the 0.0609 default is the Diebold-Li value for
+  maturities in months and places the curvature hump at 29.4 years
+  rather than months; see
+  [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
 
 - frequency:
 

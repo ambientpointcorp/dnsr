@@ -24,7 +24,10 @@ get_calibrated_dns_params(
 
 - lambda:
 
-  Numeric. Fixed lambda value to use for calibration.
+  Numeric. Fixed lambda value to use for calibration. See
+  [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md)
+  on its units; the 0.0609 fallback is a month-denominated constant and
+  maturities here are in years.
 
 - start_date:
 

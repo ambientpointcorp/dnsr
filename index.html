@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -239,6 +239,10 @@
 <p>The Nelson-Siegel model expresses the yield curve as:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msub><mi>β</mi><mn>1</mn></msub><mo>+</mo><msub><mi>β</mi><mn>2</mn></msub><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><mrow><mn>1</mn><mo>−</mo><msup><mi>e</mi><mrow><mi>−</mi><mi>λ</mi><mi>m</mi></mrow></msup></mrow><mrow><mi>λ</mi><mi>m</mi></mrow></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mo>+</mo><msub><mi>β</mi><mn>3</mn></msub><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><mrow><mn>1</mn><mo>−</mo><msup><mi>e</mi><mrow><mi>−</mi><mi>λ</mi><mi>m</mi></mrow></msup></mrow><mrow><mi>λ</mi><mi>m</mi></mrow></mfrac><mo>−</mo><msup><mi>e</mi><mrow><mi>−</mi><mi>λ</mi><mi>m</mi></mrow></msup><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">y(m) = \beta_1 + \beta_2 \left(\frac{1-e^{-\lambda m}}{\lambda m}\right) + \beta_3 \left(\frac{1-e^{-\lambda m}}{\lambda m} - e^{-\lambda m}\right)</annotation></semantics></math></p>
 <p>where: - <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">y(m)</annotation></semantics></math> is the yield at maturity <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>m</mi><annotation encoding="application/x-tex">m</annotation></semantics></math> - <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>1</mn></msub><annotation encoding="application/x-tex">\beta_1</annotation></semantics></math> represents the long-term level of interest rates - <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math> represents the yield curve slope - <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>3</mn></msub><annotation encoding="application/x-tex">\beta_3</annotation></semantics></math> represents the curvature - <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>λ</mi><annotation encoding="application/x-tex">\lambda</annotation></semantics></math> controls the decay rate of factor loadings</p>
+<p><code>λ</code> is measured <em>per unit of maturity</em>, and every function here takes maturities in <strong>years</strong>. The conventional 0.0609 comes from Diebold and Li, who worked in <strong>months</strong>, where it places the curvature hump just short of 30 months; in years the same number puts it at 29.4. It remains this package’s default for continuity, but <code><a href="reference/ns_lambda.html">ns_lambda()</a></code> and <code><a href="reference/ns_lambda.html">ns_curvature_peak()</a></code> convert between a decay and the maturity its hump sits at, so the choice can be stated in terms you can check:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/ns_lambda.html">ns_curvature_peak</a></span><span class="op">(</span><span class="fl">0.0609</span><span class="op">)</span>   <span class="co"># 29.4 -- in years, the hump is off the curve</span></span>
+<span><span class="fu"><a href="reference/ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">2.5</span><span class="op">)</span>              <span class="co"># 0.717 -- a hump at two and a half years</span></span></code></pre></div>
 <p>In the dynamic extension, the factors <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>1</mn></msub><annotation encoding="application/x-tex">\beta_1</annotation></semantics></math>, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\beta_2</annotation></semantics></math>, and <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>β</mi><mn>3</mn></msub><annotation encoding="application/x-tex">\beta_3</annotation></semantics></math> are modeled as mean-reverting Ornstein-Uhlenbeck processes:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><msub><mi>β</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msub><mi>κ</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>θ</mi><mi>i</mi></msub><mo>−</mo><msub><mi>β</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="false" form="postfix">)</mo><mi>d</mi><mi>t</mi><mo>+</mo><msub><mi>σ</mi><mi>i</mi></msub><mi>d</mi><msub><mi>W</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">d\beta_i(t) = \kappa_i(\theta_i - \beta_i(t))dt + \sigma_i dW_i(t)</annotation></semantics></math></p>
 </div>
@@ -297,10 +301,87 @@
 <p><code>treasury_yields</code> holds 1,501 daily U.S. Treasury curves across eleven maturities, 2 January 2019 to 31 December 2024, in decimal form. The source is FRED’s H.15 constant maturity series (<code>DGS1MO</code> through <code>DGS30</code>), which are U.S. government works in the public domain. <code>data-raw/treasury_yields.R</code> rebuilds it.</p>
 </div>
 <div class="section level2">
+<h2 id="fitting-dynamics-and-pricing">Fitting, Dynamics and Pricing<a class="anchor" aria-label="anchor" href="#fitting-dynamics-and-pricing"></a>
+</h2>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr>
+<th align="left">Function</th>
+<th align="left">Does</th>
+</tr></thead>
+<tbody>
+<tr>
+<td align="left"><code><a href="reference/fit_ns_model.html">fit_ns_model()</a></code></td>
+<td align="left">Fit one cross-section; <code>method = "profile"</code> solves the betas in closed form</td>
+</tr>
+<tr>
+<td align="left"><code><a href="reference/fit_dns_model.html">fit_dns_model()</a></code></td>
+<td align="left">Fit a panel, selecting the window by date</td>
+</tr>
+<tr>
+<td align="left">
+<code><a href="reference/ns_lambda.html">ns_lambda()</a></code>, <code><a href="reference/ns_lambda.html">ns_curvature_peak()</a></code>
+</td>
+<td align="left">Convert between the decay and the maturity its curvature hump sits at</td>
+</tr>
+<tr>
+<td align="left"><code><a href="reference/estimate_dns_dynamics.html">estimate_dns_dynamics()</a></code></td>
+<td align="left">Factor dynamics, diagonal or as a full VAR(1), with standard errors</td>
+</tr>
+<tr>
+<td align="left"><code><a href="reference/dns_dynamics_to_sim_params.html">dns_dynamics_to_sim_params()</a></code></td>
+<td align="left">Package dynamics for the simulator</td>
+</tr>
+<tr>
+<td align="left"><code><a href="reference/get_calibrated_dns_params.html">get_calibrated_dns_params()</a></code></td>
+<td align="left">Download, fit and return simulation-ready parameters in one call</td>
+</tr>
+<tr>
+<td align="left">
+<code><a href="reference/simulate_dns_factors.html">simulate_dns_factors()</a></code>, <code><a href="reference/simulate_dns_yield_curves.html">simulate_dns_yield_curves()</a></code>
+</td>
+<td align="left">Project forward, via YUIMA or the exact transition law</td>
+</tr>
+<tr>
+<td align="left">
+<code><a href="reference/calculate_dns_yields.html">calculate_dns_yields()</a></code>, <code><a href="reference/calculate_dns_forwards.html">calculate_dns_forwards()</a></code>
+</td>
+<td align="left">Curves and instantaneous forwards from factors</td>
+</tr>
+<tr>
+<td align="left">
+<code><a href="reference/dns_discount_factors.html">dns_discount_factors()</a></code>, <code><a href="reference/dns_zero_prices.html">dns_zero_prices()</a></code>, <code><a href="reference/dns_par_yields.html">dns_par_yields()</a></code>
+</td>
+<td align="left">Discount off a fitted curve</td>
+</tr>
+<tr>
+<td align="left"><code><a href="reference/compare_term_structure_models.html">compare_term_structure_models()</a></code></td>
+<td align="left">Nelson-Siegel against Svensson, a spline and Smith-Wilson on one date</td>
+</tr>
+<tr>
+<td align="left">
+<code><a href="reference/dns_to_yuima_model.html">dns_to_yuima_model()</a></code>, <code><a href="reference/estimate_dns_parameters_yuima.html">estimate_dns_parameters_yuima()</a></code>
+</td>
+<td align="left">A YUIMA model object, and QMLE on the factors</td>
+</tr>
+<tr>
+<td align="left">
+<code><a href="reference/fetch_fred_series.html">fetch_fred_series()</a></code>, <code><a href="reference/get_treasury_yield_data.html">get_treasury_yield_data()</a></code>, <code><a href="reference/get_treasury_yield_combined.html">get_treasury_yield_combined()</a></code>
+</td>
+<td align="left">Treasury data from FRED, with retries and caching</td>
+</tr>
+</tbody>
+</table>
+<p><code>treasury_yields</code> is the bundled panel: 1,501 daily curves across eleven maturities, 2019 to 2024.</p>
+</div>
+<div class="section level2">
 <h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
 </h2>
 <p>For detailed documentation and examples, see the package vignettes:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Basic introduction to the DNS model</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"dns-model-introduction"</span>, package <span class="op">=</span> <span class="st">"dnsr"</span><span class="op">)</span></span>
 <span></span>

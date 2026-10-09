@@ -46,7 +46,12 @@ fit_dns_model(
 
 - initial_lambda:
 
-  Numeric. Initial value for lambda parameter.
+  Numeric. Initial value for lambda, passed to
+  [`fit_ns_model`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md).
+  See
+  [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md)
+  on its units: the 0.0609 default is a month-denominated constant and
+  maturities here are in years.
 
 - show_progress:
 

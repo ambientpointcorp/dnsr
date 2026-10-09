@@ -9,7 +9,7 @@ Fits the Nelson-Siegel model to a single yield curve (cross-section) for a speci
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,14 +73,25 @@ Fits the Nelson-Siegel model to a single yield curve (cross-section) for a speci
 
 
 <dt id="arg-initial-lambda">initial_lambda<a class="anchor" aria-label="anchor" href="#arg-initial-lambda"></a></dt>
-<dd><p>Numeric. Initial value for the decay parameter lambda.</p></dd>
+<dd><p>Numeric. Initial value for the decay parameter lambda,
+per unit of maturity, and the value used outright when
+<code>lambda_constraint = "fixed"</code>. Maturities here are in years, so the
+0.0609 default is the Diebold-Li value for maturities in months and places
+the curvature hump at 29.4 years rather than months; see
+<code><a href="ns_lambda.html">ns_lambda</a></code>.</p></dd>
 
 
 <dt id="arg-lambda-constraint">lambda_constraint<a class="anchor" aria-label="anchor" href="#arg-lambda-constraint"></a></dt>
 <dd><p>Character. One of "fixed", "constrained", or "free":</p><ul><li><p>"fixed": lambda is fixed at the initial_lambda value.</p></li>
 <li><p>"constrained": lambda is optimized within bounds.</p></li>
 <li><p>"free": lambda is optimized without constraints.</p></li>
-</ul></dd>
+</ul><p>With <code>method = "optim"</code> the search over lambda is weak: L-BFGS-B's
+numerical gradient is poorly scaled when the betas are around 0.05 and
+lambda around 0.5, and in practice lambda moves very little from
+<code>initial_lambda</code> even when unconstrained. <code>method = "profile"</code>
+searches lambda properly and reaches the same optimum from any starting
+value, so prefer it when lambda is meant to be estimated rather than
+supplied.</p></dd>
 
 
 <dt id="arg-lower-bounds">lower_bounds<a class="anchor" aria-label="anchor" href="#arg-lower-bounds"></a></dt>
