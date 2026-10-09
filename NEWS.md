@@ -1,3 +1,66 @@
+# dnsr 0.4.2
+
+The vignettes, which had been left at 0.1.0-era content while everything else
+moved, plus one defect they surfaced.
+
+## Fix
+
+* `estimate_dns_dynamics(structure = "full")` warned "No mean reversion
+  detected" whenever a factor's own diagonal entry came out non-positive. That
+  is the right diagnostic for the diagonal structure, where a non-positive
+  kappa does mean the factor never reverts, and the wrong one for a full
+  matrix, where a negative own coefficient is perfectly compatible with a
+  stable system: what settles that is the eigenvalues of the whole matrix. On
+  the bundled panel the full VAR has `kappa[1,1] = -2.6` and eigenvalues of
+  1.40, 1.40 and 0.49 -- stable, and warned about anyway. The per-factor
+  warning is now raised only under `structure = "diagonal"`, and a system
+  whose eigenvalues are not all positive raises one warning naming them.
+
+## Vignettes
+
+* `dns-model-introduction` ran almost nothing: 14 of its 16 chunks were
+  `eval = FALSE`, and the two that ran fabricated yields with `rnorm()`. It now
+  runs end to end against the bundled `treasury_yields` panel, so the output is
+  real and `R CMD check` verifies it. It covers the profiled fit, `print()` and
+  `summary()`, the standard errors and half-life interval, the full
+  mean-reversion matrix, the exact simulation engine, the pricing helpers, and
+  the model comparison.
+
+  It also now explains the choice a panel forces and a single curve does not:
+  with lambda free it ranges from 0.04 to 0.50 across these dates, so beta2 on
+  one date does not mean what it means on the next and the factors stop being a
+  comparable time series. Fixing lambda, as Diebold and Li do, costs about 14
+  basis points of median fit against 7 and buys factors that can be modelled
+  over time.
+* `dnsr-yuima-integration` claimed `"milstein"` gives "higher accuracy". It does
+  not: the Milstein correction is proportional to the derivative of the
+  diffusion with respect to the state, and this diffusion is constant, so the
+  term vanishes and the two schemes coincide. Removed, and the two engines now
+  have a section explaining what each is actually for.
+
+  Its 41-line hand-rolled Euler fallback for when YUIMA is absent is gone;
+  `engine = "exact"` does that properly, with no discretisation error.
+
+  The QMLE section printed a true-versus-estimated table with no comment, and
+  the table is alarming on its face: kappa for the level factor comes back 120
+  times too large. The vignette now explains why, which makes it the most
+  useful passage in it. Sigma is recovered to within a few percent, because
+  volatility is identified by high-frequency variation. Kappa is not, and the
+  error tracks the ratio of each factor's half-life to the sample: 35 years
+  against 2 gives 120x, 2.3 years gives 7x, 1.4 years gives 1.3x. No estimator
+  recovers a 35-year half-life from two years of data, and theta inherits the
+  problem, since the level a process reverts to is identified only if the
+  reversion is.
+* `fred-api-setup` told readers to hand-roll a caching layer and to wait out
+  rate limits. Both are built in now, so it documents `cache_dir` and
+  `retries` instead -- including that cache keys exclude the API key, that a
+  hit is served before the key is looked up, and that the cache does not
+  expire. It gains a section on missing observations covering `max_gap`,
+  `fill_missing` and why the fill direction matters, a note on `date_order`,
+  and a pointer to the bundled data for readers who do not need a key yet.
+* Fixed a broken cross-reference: the introduction pointed at
+  `vignette("yuima-integration")`, which does not exist.
+
 # dnsr 0.4.1
 
 Follow-ups to 0.4.0: no change to what any function computes, except one
