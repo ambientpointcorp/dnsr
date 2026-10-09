@@ -12,7 +12,8 @@ fit_ns_model(
   lower_bounds = c(-0.1, -0.5, -0.5, 0.01),
   upper_bounds = c(0.2, 0.5, 0.5, 0.5),
   optimizer = "L-BFGS-B",
-  method = c("optim", "profile")
+  method = c("optim", "profile"),
+  control = list()
 )
 }
 \arguments{
@@ -57,6 +58,13 @@ and only lambda is searched, over one dimension. The profiled fit does not
 depend on beta start values and does not need beta bounds, which removes
 the boundary solutions \code{"optim"} can return; it is the recommended
 setting and is expected to become the default.}
+
+\item{control}{List. Passed to \code{\link[stats]{optim}}'s \code{control}
+argument by \code{method = "optim"}; ignored by \code{method = "profile"},
+which uses \code{\link[stats]{optimize}}. The objective is minimised in
+squared basis points so that L-BFGS-B's relative convergence test is
+genuinely relative, which means \code{factr} keeps its documented meaning
+here and rarely needs changing.}
 }
 \value{
 A list containing:

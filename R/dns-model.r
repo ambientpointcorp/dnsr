@@ -35,6 +35,12 @@
 #' @param upper_bounds Numeric vector of length 4. Upper bounds for parameters (beta1, beta2, beta3, lambda).
 #' @param optimizer Character. The optimization method to use. Default is
 #'   "L-BFGS-B". Used by \code{method = "optim"} only.
+#' @param control List. Passed to \code{\link[stats]{optim}}'s \code{control}
+#'   argument by \code{method = "optim"}; ignored by \code{method = "profile"},
+#'   which uses \code{\link[stats]{optimize}}. The objective is minimised in
+#'   squared basis points so that L-BFGS-B's relative convergence test is
+#'   genuinely relative, which means \code{factr} keeps its documented meaning
+#'   here and rarely needs changing.
 #' @param method Character. How to solve the fit. \code{"optim"} (the default)
 #'   searches all four parameters numerically, as in earlier versions.
 #'   \code{"profile"} exploits the fact that the curve is linear in the betas
@@ -101,7 +107,8 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
                          lower_bounds = c(-0.1, -0.5, -0.5, 0.01),
                          upper_bounds = c(0.2, 0.5, 0.5, 0.5),
                          optimizer = "L-BFGS-B",
-                         method = c("optim", "profile")) {
+                         method = c("optim", "profile"),
+                         control = list()) {
   method <- match.arg(method)
 
   # Parameter validation. Missing values are permitted here: observations
@@ -114,6 +121,7 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
   checkmate::assert_numeric(lower_bounds, len = 4)
   checkmate::assert_numeric(upper_bounds, len = 4)
   checkmate::assert_character(optimizer, len = 1)
+  checkmate::assert_list(control, names = "unique")
 
   # Make sure inputs are numeric and have same length
   maturities <- as.numeric(maturities)
@@ -155,13 +163,29 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
     beta1 + beta2 * loadings[, 1] + beta3 * loadings[, 2]
   }
 
-  # Error function to minimize (sum of squared errors)
+  # Error function to minimize (sum of squared errors), scaled for the
+  # optimiser only.
+  #
+  # L-BFGS-B stops when the achieved reduction in f, divided by
+  # max(|f_old|, |f_new|, 1), falls below factr * .Machine$double.eps. A sum of
+  # squared errors in decimal yields is around 1e-5, so that denominator is the
+  # constant 1 and the "relative" test degenerates into an absolute one of
+  # roughly 2.2e-9 -- larger than most of the progress still available. The
+  # search then reports CONVERGENCE after a handful of evaluations without
+  # having moved off its start value.
+  #
+  # Working in squared basis points puts the objective above 1, where the test
+  # measures what it is documented to measure. A positive constant does not
+  # move the minimiser, so the parameters, rmse and residuals below are those
+  # of the unscaled problem; only the stopping decision changes.
+  SSE_SCALE <- 1e8
+
   error_fn <- function(params) {
     # Calculate model yields
     model_yields <- ns_yields(params, maturities)
 
     # Return sum of squared errors
-    sum((yields - model_yields)^2)
+    sum((yields - model_yields)^2) * SSE_SCALE
   }
 
   # Initial parameter guess. The slope start value is short minus long, taken
@@ -261,7 +285,8 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
       fn = opt_fn,
       method = optimizer,
       lower = lower_bounds[1:3],
-      upper = upper_bounds[1:3]
+      upper = upper_bounds[1:3],
+      control = control
     )
 
     # Combine optimized betas with fixed lambda
@@ -275,7 +300,8 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
       fn = error_fn,
       method = optimizer,
       lower = lower_bounds,
-      upper = upper_bounds
+      upper = upper_bounds,
+      control = control
     )
 
     # Extract optimized parameters
@@ -289,7 +315,8 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
     opt_result <- optim(
       par = initial_params,
       fn = error_fn,
-      method = if (missing(optimizer)) "BFGS" else optimizer
+      method = if (missing(optimizer)) "BFGS" else optimizer,
+      control = control
     )
 
     # Extract optimized parameters

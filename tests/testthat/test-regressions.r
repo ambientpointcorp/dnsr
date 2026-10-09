@@ -543,9 +543,13 @@ test_that("without warm start, a date's fit is independent of the panel", {
                  info = column)
   }
 
-  # With warm starting on, they are close but not identical: each fit is
-  # initialised from the previous date's lambda, and the month-end chain is
-  # not the daily one.
+  # Warm starting changes where each fit begins -- the previous date's lambda,
+  # and the month-end chain is not the daily one -- but no longer changes where
+  # it ends. While the optimiser's relative convergence test was degenerate it
+  # stopped close enough to its start value for the chain to leak into the
+  # answer, and these two disagreed. With the objective scaled so that test
+  # means what it says, both searches reach the same optimum and warm starting
+  # buys speed only. That is the property worth pinning.
   warm_subset <- suppressWarnings(fit_dns_model(
     month_ends, n_days = nrow(month_ends), show_progress = FALSE
   ))
@@ -553,10 +557,8 @@ test_that("without warm start, a date's fit is independent of the panel", {
     window, n_days = nrow(window), show_progress = FALSE
   ))
   warm_shared <- match(warm_subset$parameters$Date, warm_full$parameters$Date)
-  expect_false(isTRUE(all.equal(
-    warm_subset$parameters$lambda,
-    warm_full$parameters$lambda[warm_shared]
-  )))
+  expect_equal(warm_subset$parameters$lambda,
+               warm_full$parameters$lambda[warm_shared])
 })
 
 
@@ -568,10 +570,17 @@ test_that("fit_dns_model can widen the bounds its at_bound report complains abou
     !duplicated(format(treasury_yields$Date, "%Y-%m"), fromLast = TRUE),
   ]
 
+  # The subject here is whether bounds reach the cross-sectional fitter, so the
+  # starting lambda is pinned rather than left to the default: the two
+  # questions are separable, and a default that sits in the degenerate
+  # small-lambda basin would otherwise decide this test's outcome.
+  start <- ns_lambda(3.5)
+
   # Default ceiling on lambda is 0.5, and real curves reach it.
   expect_warning(
     clamped <- fit_dns_model(month_ends, n_days = nrow(month_ends),
-                             show_progress = FALSE, warm_start = FALSE),
+                             show_progress = FALSE, warm_start = FALSE,
+                             initial_lambda = start),
     "rest on a bound in some fits"
   )
   expect_true(any(clamped$at_bound[, "lambda"]))
@@ -581,6 +590,7 @@ test_that("fit_dns_model can widen the bounds its at_bound report complains abou
   # all: the report named a problem the function gave no way to act on.
   freed <- fit_dns_model(month_ends, n_days = nrow(month_ends),
                          show_progress = FALSE, warm_start = FALSE,
+                         initial_lambda = start,
                          lower_bounds = c(-1, -1, -1, 0.01),
                          upper_bounds = c(1, 1, 1, 5))
   expect_false(any(freed$at_bound))

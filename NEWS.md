@@ -1,3 +1,41 @@
+# dnsr 0.6.0
+
+The lambda search, and the default it starts from. Every function keeps its
+signature, its return structure and its class; the numbers move, because the
+old ones came from a search that was not searching and a default that placed
+the curvature hump past the end of most curves. Passing
+`initial_lambda = 0.0609, method = "optim"` reproduces the previous results.
+
+## The cross-sectional search now actually searches
+
+`fit_ns_model()` minimised a sum of squared errors of about 1e-5. L-BFGS-B
+stops when the reduction in the objective, divided by `max(|f|, 1)`, falls
+below `factr * .Machine$double.eps`; with an objective that small the
+denominator is the constant 1, so the relative test became an absolute one of
+roughly 2.2e-9 and the search reported success after as few as 17 function
+evaluations, having barely moved off its start value.
+
+The objective is now minimised in squared basis points, which puts it above 1
+where that test measures what it is documented to measure. A positive constant
+does not move the minimiser, so the reported parameters are those of the same
+problem; only the stopping decision changes. On the bundled panel, mean fit
+error over 120 sampled dates:
+
+|                      | before | after |
+|----------------------|--------|-------|
+| `initial_lambda = 0.0609`  | 10.308 bp | 9.715 bp |
+| `initial_lambda = 0.5124`  |  9.617 bp | 8.620 bp |
+
+Two consequences worth knowing. Warm starting in `fit_dns_model()` now changes
+speed rather than answers, because both chains reach the same optimum. And a
+search that moves can reach the degenerate small-lambda corner, where the level
+and slope loadings both tend to 1, the design goes collinear and the curvature
+factor runs to its bound; from the old 0.0609 default that happened on 6 of 72
+month-ends. The next section is why.
+
+`fit_ns_model()` also gained a `control` argument, forwarded to `optim()`. It
+is appended to the signature, so positional calls are unaffected.
+
 # dnsr 0.5.0
 
 Documentation, plus one additive pair of helpers. No existing function changes
