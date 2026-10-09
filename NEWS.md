@@ -36,6 +36,63 @@ month-ends. The next section is why.
 `fit_ns_model()` also gained a `control` argument, forwarded to `optim()`. It
 is appended to the signature, so positional calls are unaffected.
 
+## The default lambda, and the range it is searched over
+
+`lambda` is per unit of maturity, and every function here takes maturities in
+**years**. The old default of 0.0609 is the value Diebold and Li published for
+maturities in **months**: in years it places the curvature hump at 29.4 years,
+off the end of most curves, where the slope loading is nearly parallel to the
+level loading and the level and slope factors are not separately identified.
+
+Every lambda default in the package is now `ns_lambda(3.5)`, which places the
+hump at 3.5 years, near the middle of a Treasury curve. It is written that way
+so the number states its own meaning. On the bundled panel, fitting a single
+fixed lambda to all 1,501 curves:
+
+|                                  | 0.0609 | ns_lambda(3.5) |
+|----------------------------------|--------|----------------|
+| panel fit error                  | 20.69 bp | 11.81 bp |
+| median day-to-day change in beta1 | 17.92 bp | 3.55 bp |
+| median day-to-day change in beta2 | 18.11 bp | 3.88 bp |
+| median day-to-day change in beta3 | 37.21 bp | 8.61 bp |
+| largest beta3                    | 2386 bp | 491 bp |
+
+The factor columns matter more than the fit column: at 0.0609 the factors were
+five times noisier day to day and beta3 reached 23.9 percentage points, because
+two of the three were not identified and wandered in offsetting directions.
+This package exists to estimate their dynamics, so that was the real cost.
+
+The ceiling on lambda rises from 0.5 to 2. At 0.5 it bound roughly a third of
+real month-end curves, and raising the default start made that worse before it
+made it better. Fitting the 72 month-ends in the bundled panel:
+
+| | median fit error | fits resting on a bound |
+|---|---|---|
+| old default, old ceiling | 6.051 bp | 25 of 71 |
+| new default, old ceiling | 4.685 bp | 29 of 72 |
+| new default, new ceiling | 4.467 bp |  9 of 72 |
+
+A clamped lambda is still reported through `at_bound` rather than silently. The
+ceiling is 2 rather than higher on purpose: lambda is a shape parameter, and
+factors estimated at different lambda are not on the same scale, so buying
+in-sample fit by letting it float freely costs the comparability across dates
+that the dynamics step depends on.
+
+## method = "profile" searches lambda globally
+
+The profiled objective is not unimodal: a basin near zero, where both the level
+and slope loadings tend to 1, is separated from the basin a real curve wants by
+a ridge. `optimize()` is a local bracketing search, so it returned whichever
+basin its first three probes happened to straddle. Widening the interval to the
+new ceiling made this visible -- it began missing the optimum of a curve that
+is exactly Nelson-Siegel, with a known answer.
+
+`method = "profile"` now scans a log-spaced grid over the lambda interval and
+refines between the neighbouring grid points, which bracket the minimum. The
+scan is log-spaced because lambda acts as a reciprocal maturity: 0.02 to 0.04
+moves the hump 45 years, 1.00 to 1.02 moves it half a month. On an exactly
+representable curve it recovers lambda to six decimals and fits to 1e-12.
+
 # dnsr 0.5.0
 
 Documentation, plus one additive pair of helpers. No existing function changes

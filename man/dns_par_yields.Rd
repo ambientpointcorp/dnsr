@@ -4,7 +4,7 @@
 \alias{dns_par_yields}
 \title{Par Coupon Yields from DNS Factors}
 \usage{
-dns_par_yields(factors, maturities, lambda = 0.0609, frequency = 2)
+dns_par_yields(factors, maturities, lambda = ns_lambda(3.5), frequency = 2)
 }
 \arguments{
 \item{factors}{Array or matrix. DNS factors, as in
@@ -14,9 +14,11 @@ dns_par_yields(factors, maturities, lambda = 0.0609, frequency = 2)
 number of coupon periods; see Details.}
 
 \item{lambda}{Numeric. DNS decay parameter lambda, per unit of maturity.
-Maturities here are in years, so the 0.0609 default is the Diebold-Li
-value for maturities in months and places the curvature hump at 29.4
-years rather than months; see \code{\link{ns_lambda}}.}
+Maturities here are in years, and the default places the curvature hump at
+3.5 years, near the middle of a Treasury curve. It is written as
+\code{ns_lambda(3.5)} so the number states its own meaning; see
+\code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+constant and in years would place that hump at 29.4 years.}
 
 \item{frequency}{Integer. Coupon payments per year. Defaults to 2, the
 U.S. Treasury convention.}

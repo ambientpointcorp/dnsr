@@ -133,22 +133,22 @@ test_that("the profiled fit recovers a synthetic curve far more closely", {
 
 test_that("the profiled fit reports a lambda resting on its bound", {
   maturities <- c(0.25, 1, 2, 5, 10, 30)
-  # Generated with a decay well above the default ceiling of 0.5.
-  yields <- ns_curve(maturities, c(0.045, -0.02, 0.03), 1.2)
+  # Generated with a decay well above the default ceiling of 2.
+  yields <- ns_curve(maturities, c(0.045, -0.02, 0.03), 3.5)
 
   expect_warning(
     clamped <- fit_ns_model(maturities, yields, method = "profile"),
     "rests on a parameter bound"
   )
   expect_true(clamped$at_bound[["lambda"]])
-  expect_equal(clamped$parameters[["lambda"]], 0.5, tolerance = 1e-5)
+  expect_equal(clamped$parameters[["lambda"]], 2, tolerance = 1e-5)
 
   # Given room, it finds the interior optimum and reports no bound.
   free <- fit_ns_model(maturities, yields, method = "profile",
                        lower_bounds = c(-1, -1, -1, 0.01),
                        upper_bounds = c(1, 1, 1, 5))
   expect_false(any(free$at_bound))
-  expect_equal(free$parameters[["lambda"]], 1.2, tolerance = 1e-3)
+  expect_equal(free$parameters[["lambda"]], 3.5, tolerance = 1e-3)
 })
 
 test_that("fit_dns_model reports bound hits once for the whole panel", {
@@ -157,7 +157,7 @@ test_that("fit_dns_model reports bound hits once for the whole panel", {
   panel <- data.frame(Date = dates)
   for (k in seq_along(maturities)) {
     panel[[as.character(maturities[k])]] <-
-      ns_curve(maturities[k], c(0.045, -0.02, 0.03), 1.2) +
+      ns_curve(maturities[k], c(0.045, -0.02, 0.03), 3.5) +
       1e-4 * seq_along(dates)
   }
 
@@ -679,12 +679,35 @@ test_that("ns_lambda and ns_curvature_peak are inverses, and vectorised", {
 
 test_that("ns_curvature_peak explains the package default", {
   # 0.0609 is the Diebold-Li value for maturities in months, where it peaks
-  # just short of 30. The package measures maturities in years.
+  # just short of 30. The package measures maturities in years, so that same
+  # number would put the hump at 29.4 years, off the end of most curves -- the
+  # reason it is not the default here.
   expect_equal(ns_curvature_peak(0.0609), 29.4, tolerance = 0.01)
   expect_equal(ns_lambda(30), 0.0598, tolerance = 1e-3)
 
-  # The default of fit_ns_model() is that same number.
-  expect_equal(eval(formals(fit_ns_model)$initial_lambda), 0.0609)
+  # The default of fit_ns_model() is written in terms of where it puts the
+  # hump, so the number states its own meaning.
+  expect_equal(eval(formals(fit_ns_model)$initial_lambda), ns_lambda(3.5))
+  expect_equal(ns_curvature_peak(eval(formals(fit_ns_model)$initial_lambda)), 3.5)
+
+  # Every lambda default in the package agrees with it: a package with two
+  # different conventions would be worse than one with the wrong one. The
+  # argument is fetched exactly, because `$` on a formals pairlist matches
+  # partially and fit_dns_model's lambda_constraint would answer to "lambda".
+  defaults <- list(
+    fit_dns_model = "initial_lambda",
+    calculate_dns_yields = "lambda",
+    calculate_dns_forwards = "lambda",
+    dns_discount_factors = "lambda",
+    dns_zero_prices = "lambda",
+    dns_par_yields = "lambda",
+    plot_dns_loadings = "lambda",
+    simulate_dns_yield_curves = "lambda"
+  )
+  for (fn in names(defaults)) {
+    arg <- formals(get(fn))[[defaults[[fn]], exact = TRUE]]
+    expect_equal(eval(arg), ns_lambda(3.5), info = fn)
+  }
 })
 
 test_that("ns_lambda rejects nonsense", {

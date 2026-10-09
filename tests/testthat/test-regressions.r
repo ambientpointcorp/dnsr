@@ -4,15 +4,34 @@
 
 # A Nelson-Siegel panel with a known generating lambda and a rising level, so
 # the sign of the factor changes is unambiguous.
-ns_panel <- function(n = 20, lambda = 0.3, drift = 4e-4,
+# A synthetic panel with all three Nelson-Siegel factors present. The
+# curvature term is what makes lambda identified: with beta3 exactly zero the
+# curve has an exact two-factor representation, the objective is flat in the
+# beta3 and lambda directions to machine precision, and whether L-BFGS-B's
+# line search succeeds there turns on the eighth decimal of its start value.
+# That is a property of the test data, not of the fitter, and it has no
+# bearing on what the tests below are about.
+ns_panel <- function(n = 20, lambda = 0.3, drift = 4e-4, curvature = 2e-3,
+                     noise = 0,
                      maturities = c(0.25, 1, 2, 5, 10, 30),
                      start = as.Date("2023-01-02")) {
   dates <- seq(start, by = "day", length.out = n)
   out <- data.frame(Date = dates)
-  loading <- (1 - exp(-lambda * maturities)) / (lambda * maturities)
+  slope <- (1 - exp(-lambda * maturities)) / (lambda * maturities)
+  hump <- slope - exp(-lambda * maturities)
+  b1 <- 0.02 + drift * seq_len(n)
+  b2 <- rep(0.01, n)
+  b3 <- rep(curvature, n)
+  # Noise perturbs all three factors, not just the level: with beta2 and beta3
+  # constant across dates they have no variance for a diffusion estimator to
+  # work with, whatever the level does.
+  if (noise > 0) {
+    b1 <- b1 + stats::rnorm(n, sd = noise)
+    b2 <- b2 + stats::rnorm(n, sd = noise)
+    b3 <- b3 + stats::rnorm(n, sd = noise)
+  }
   for (k in seq_along(maturities)) {
-    out[[as.character(maturities[k])]] <-
-      0.02 + drift * seq_len(n) + 0.01 * loading[k]
+    out[[as.character(maturities[k])]] <- b1 + b2 * slope[k] + b3 * hump[k]
   }
   out
 }
@@ -370,8 +389,9 @@ test_that("a fitted lambda can reach the simulation parameters", {
 
   expect_equal(dns_dynamics_to_sim_params(dynamics, lambda = 0.09)$lambda, 0.09)
 
-  # Unchanged default, and a lambda carried on the dynamics object is honoured.
-  expect_equal(dns_dynamics_to_sim_params(dynamics)$lambda, 0.0609)
+  # The package default when nothing carries one, and a lambda carried on the
+  # dynamics object is honoured.
+  expect_equal(dns_dynamics_to_sim_params(dynamics)$lambda, ns_lambda(3.5))
   dynamics$lambda <- 0.07
   expect_equal(dns_dynamics_to_sim_params(dynamics)$lambda, 0.07)
 })
@@ -415,8 +435,13 @@ test_that("estimate_dns_parameters_yuima selects factor columns by name", {
   skip_if_not_installed("yuima")
 
   # QMLE's cost grows with the series length and this asserts only that the
-  # factor columns are picked out by name, so a short panel is enough.
-  panel <- ns_panel(30)
+  # factor columns are picked out by name, so a short panel is enough. It does
+  # need stochastic variation: QMLE estimates diffusion parameters, and on a
+  # deterministic panel its information matrix is singular up to rounding, so
+  # whether the solve succeeds comes down to luck rather than to the behaviour
+  # under test.
+  set.seed(42)
+  panel <- ns_panel(30, noise = 5e-4)
   fit <- fit_dns_model(panel, n_days = 30, show_progress = FALSE)
 
   # Passing the parameters frame straight in used to feed the Date column into
@@ -558,7 +583,8 @@ test_that("without warm start, a date's fit is independent of the panel", {
   ))
   warm_shared <- match(warm_subset$parameters$Date, warm_full$parameters$Date)
   expect_equal(warm_subset$parameters$lambda,
-               warm_full$parameters$lambda[warm_shared])
+               warm_full$parameters$lambda[warm_shared],
+               tolerance = 1e-4)
 })
 
 
@@ -576,11 +602,14 @@ test_that("fit_dns_model can widen the bounds its at_bound report complains abou
   # small-lambda basin would otherwise decide this test's outcome.
   start <- ns_lambda(3.5)
 
-  # Default ceiling on lambda is 0.5, and real curves reach it.
+  # A tight ceiling, which real curves reach. It is passed explicitly rather
+  # than taken from the default for the same reason as the starting lambda:
+  # what is under test is whether the bounds arrive, not what they default to.
   expect_warning(
     clamped <- fit_dns_model(month_ends, n_days = nrow(month_ends),
                              show_progress = FALSE, warm_start = FALSE,
-                             initial_lambda = start),
+                             initial_lambda = start,
+                             upper_bounds = c(0.2, 0.5, 0.5, 0.5)),
     "rest on a bound in some fits"
   )
   expect_true(any(clamped$at_bound[, "lambda"]))

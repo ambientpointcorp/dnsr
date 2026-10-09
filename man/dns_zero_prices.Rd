@@ -4,7 +4,7 @@
 \alias{dns_zero_prices}
 \title{Zero-Coupon Bond Prices from DNS Factors}
 \usage{
-dns_zero_prices(factors, maturities, lambda = 0.0609, face = 100)
+dns_zero_prices(factors, maturities, lambda = ns_lambda(3.5), face = 100)
 }
 \arguments{
 \item{factors}{Array or matrix. DNS factors, as in
@@ -13,9 +13,11 @@ dns_zero_prices(factors, maturities, lambda = 0.0609, face = 100)
 \item{maturities}{Numeric vector. Maturities in years.}
 
 \item{lambda}{Numeric. DNS decay parameter lambda, per unit of maturity.
-Maturities here are in years, so the 0.0609 default is the Diebold-Li
-value for maturities in months and places the curvature hump at 29.4
-years rather than months; see \code{\link{ns_lambda}}.}
+Maturities here are in years, and the default places the curvature hump at
+3.5 years, near the middle of a Treasury curve. It is written as
+\code{ns_lambda(3.5)} so the number states its own meaning; see
+\code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+constant and in years would place that hump at 29.4 years.}
 
 \item{face}{Numeric. Face value of the bond. Defaults to 100.}
 }

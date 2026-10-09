@@ -13,9 +13,11 @@
 #'   (time, factor). The same shapes \code{\link{calculate_dns_yields}} accepts.
 #' @param maturities Numeric vector. Maturities in years.
 #' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
-#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
-#'   value for maturities in months and places the curvature hump at 29.4
-#'   years rather than months; see \code{\link{ns_lambda}}.
+#'   Maturities here are in years, and the default places the curvature hump at
+#'   3.5 years, near the middle of a Treasury curve. It is written as
+#'   \code{ns_lambda(3.5)} so the number states its own meaning; see
+#'   \code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+#'   constant and in years would place that hump at 29.4 years.
 #'
 #' @return An array of discount factors indexed by (time, maturity, path), or a
 #'   matrix indexed by (time, maturity) when \code{factors} is a matrix --
@@ -41,7 +43,8 @@
 #' @seealso \code{\link{dns_zero_prices}}, \code{\link{dns_par_yields}}
 #'
 #' @export
-dns_discount_factors <- function(factors, maturities, lambda = 0.0609) {
+dns_discount_factors <- function(factors, maturities,
+                                 lambda = ns_lambda(3.5)) {
   checkmate::assert_numeric(maturities, lower = 0, any.missing = FALSE,
                             min.len = 1)
   checkmate::assert_numeric(lambda, lower = 0, len = 1, any.missing = FALSE)
@@ -65,9 +68,11 @@ dns_discount_factors <- function(factors, maturities, lambda = 0.0609) {
 #'   \code{\link{dns_discount_factors}}.
 #' @param maturities Numeric vector. Maturities in years.
 #' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
-#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
-#'   value for maturities in months and places the curvature hump at 29.4
-#'   years rather than months; see \code{\link{ns_lambda}}.
+#'   Maturities here are in years, and the default places the curvature hump at
+#'   3.5 years, near the middle of a Treasury curve. It is written as
+#'   \code{ns_lambda(3.5)} so the number states its own meaning; see
+#'   \code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+#'   constant and in years would place that hump at 29.4 years.
 #' @param face Numeric. Face value of the bond. Defaults to 100.
 #'
 #' @return Prices in the same shape as \code{\link{dns_discount_factors}}.
@@ -88,7 +93,8 @@ dns_discount_factors <- function(factors, maturities, lambda = 0.0609) {
 #' @seealso \code{\link{dns_discount_factors}}, \code{\link{dns_par_yields}}
 #'
 #' @export
-dns_zero_prices <- function(factors, maturities, lambda = 0.0609, face = 100) {
+dns_zero_prices <- function(factors, maturities, lambda = ns_lambda(3.5),
+                            face = 100) {
   checkmate::assert_numeric(face, len = 1, any.missing = FALSE)
   face * dns_discount_factors(factors, maturities, lambda)
 }
@@ -105,9 +111,11 @@ dns_zero_prices <- function(factors, maturities, lambda = 0.0609, face = 100) {
 #' @param maturities Numeric vector. Maturities in years. Each must be a whole
 #'   number of coupon periods; see Details.
 #' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
-#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
-#'   value for maturities in months and places the curvature hump at 29.4
-#'   years rather than months; see \code{\link{ns_lambda}}.
+#'   Maturities here are in years, and the default places the curvature hump at
+#'   3.5 years, near the middle of a Treasury curve. It is written as
+#'   \code{ns_lambda(3.5)} so the number states its own meaning; see
+#'   \code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+#'   constant and in years would place that hump at 29.4 years.
 #' @param frequency Integer. Coupon payments per year. Defaults to 2, the
 #'   U.S. Treasury convention.
 #'
@@ -166,7 +174,7 @@ dns_zero_prices <- function(factors, maturities, lambda = 0.0609, face = 100) {
 #' @seealso \code{\link{dns_discount_factors}}, \code{\link{dns_zero_prices}}
 #'
 #' @export
-dns_par_yields <- function(factors, maturities, lambda = 0.0609,
+dns_par_yields <- function(factors, maturities, lambda = ns_lambda(3.5),
                            frequency = 2) {
   checkmate::assert_numeric(maturities, lower = 0, any.missing = FALSE,
                             min.len = 1)

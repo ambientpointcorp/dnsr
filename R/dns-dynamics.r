@@ -483,7 +483,8 @@ kappa_matrix_eigenvalues <- function(dynamics) {
 #' @param include_correlation Logical. If TRUE, include the correlation structure.
 #' @param lambda Numeric. The Nelson-Siegel decay parameter to carry into the
 #'   simulation parameters. If NULL (the default) it is taken from
-#'   \code{dynamics$lambda} when present, and otherwise falls back to 0.0609.
+#'   \code{dynamics$lambda} when present, and otherwise falls back to
+#'   \code{ns_lambda(3.5)}.
 #'   \code{estimate_dns_dynamics()} does not estimate lambda, so pass the value
 #'   fitted by \code{\link{fit_dns_model}} to avoid simulating off the default.
 #'
@@ -507,7 +508,7 @@ kappa_matrix_eigenvalues <- function(dynamics) {
 #'                             show_progress = FALSE, warm_start = FALSE)
 #' dynamics <- estimate_dns_dynamics(dns_result$parameters)
 #'
-#' # Pass the fitted lambda through, rather than leaving the 0.0609 default
+#' # Pass the fitted lambda through, rather than leaving the default
 #' latest <- dns_result$parameters[which.max(dns_result$parameters$Date), ]
 #' sim_params <- dns_dynamics_to_sim_params(dynamics, lambda = latest$lambda)
 #' str(sim_params)
@@ -536,7 +537,7 @@ dns_dynamics_to_sim_params <- function(dynamics, include_correlation = TRUE,
   # Resolve lambda: an explicit argument wins, then a lambda carried on the
   # dynamics object, then the conventional Diebold-Li value.
   if (is.null(lambda)) {
-    lambda <- if ("lambda" %in% names(dynamics)) dynamics$lambda else 0.0609
+    lambda <- if ("lambda" %in% names(dynamics)) dynamics$lambda else ns_lambda(3.5)
   }
   checkmate::assert_numeric(lambda, lower = 0, len = 1, any.missing = FALSE)
 
@@ -583,8 +584,8 @@ dns_dynamics_to_sim_params <- function(dynamics, include_correlation = TRUE,
 #'
 #' @param lookback_days Integer. Number of days to use for calibration.
 #' @param lambda Numeric. Fixed lambda value to use for calibration. See
-#'   \code{\link{ns_lambda}} on its units; the 0.0609 fallback is a
-#'   month-denominated constant and maturities here are in years.
+#'   \code{\link{ns_lambda}} on its units. The fallback places the curvature
+#'   hump at 3.5 years, and maturities here are in years.
 #' @param start_date Date or character. Start date for the data window.
 #' @param end_date Date or character. End date for the data window.
 #' @param verbose Logical. If TRUE, print progress information.
@@ -643,7 +644,7 @@ get_calibrated_dns_params <- function(lookback_days = 60, lambda = NULL,
 
   # Set lambda constraint based on input
   lambda_constraint <- if (is.null(lambda)) "constrained" else "fixed"
-  initial_lambda <- if (is.null(lambda)) 0.0609 else lambda
+  initial_lambda <- if (is.null(lambda)) ns_lambda(3.5) else lambda
 
   dns_result <- fit_dns_model(
     yield_data = yield_data,

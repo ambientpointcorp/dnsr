@@ -609,7 +609,7 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
     forwards <- calculate_dns_forwards(
       factors = sim_result$factors,
       maturities = maturities,
-      lambda = if ("lambda" %in% names(sim_result)) sim_result$lambda else 0.0609
+      lambda = if ("lambda" %in% names(sim_result)) sim_result$lambda else ns_lambda(3.5)
     )
 
     # Prepare data, on the same grid as the yield panel above
@@ -654,9 +654,11 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
 #'
 #' @param maturities Numeric vector. Maturities (in years) for which to calculate loadings.
 #' @param lambda Numeric. DNS decay parameter lambda, per unit of maturity.
-#'   Maturities here are in years, so the 0.0609 default is the Diebold-Li
-#'   value for maturities in months and places the curvature hump at 29.4
-#'   years rather than months; see \code{\link{ns_lambda}}.
+#'   Maturities here are in years, and the default places the curvature hump at
+#'   3.5 years, near the middle of a Treasury curve. It is written as
+#'   \code{ns_lambda(3.5)} so the number states its own meaning; see
+#'   \code{\link{ns_lambda}}. Diebold and Li's 0.0609 is a month-denominated
+#'   constant and in years would place that hump at 29.4 years.
 #' @param show_labels Logical. If TRUE, add labels to the plot.
 #'
 #' @return A ggplot object with the factor loadings plot.
@@ -669,7 +671,7 @@ plot_simulated_yields <- function(sim_result, time_points = c(0, 1, 5, 10),
 #'
 #' @export
 plot_dns_loadings <- function(maturities = seq(0, 30, length.out = 100),
-                              lambda = 0.0609, show_labels = TRUE) {
+                              lambda = ns_lambda(3.5), show_labels = TRUE) {
   # Parameter validation
   checkmate::assert_numeric(maturities, lower = 0)
   checkmate::assert_numeric(lambda, lower = 0, len = 1)

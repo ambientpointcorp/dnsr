@@ -15,9 +15,13 @@
 #' @param yields Numeric vector. The yield values corresponding to the maturities.
 #' @param initial_lambda Numeric. Initial value for the decay parameter lambda,
 #'   per unit of maturity, and the value used outright when
-#'   \code{lambda_constraint = "fixed"}. Maturities here are in years, so the
-#'   0.0609 default is the Diebold-Li value for maturities in months and places
-#'   the curvature hump at 29.4 years rather than months; see
+#'   \code{lambda_constraint = "fixed"}. Maturities here are in years, and the
+#'   default places the curvature hump at 3.5 years, near the middle of a
+#'   Treasury curve; it is written as \code{ns_lambda(3.5)} so the number
+#'   states its own meaning. Diebold and Li's 0.0609 is a month-denominated
+#'   constant: in years it places the hump at 29.4 years, off the end of most
+#'   curves, where the slope loading is nearly parallel to the level loading
+#'   and the two factors are not separately identified. See
 #'   \code{\link{ns_lambda}}.
 #' @param lambda_constraint Character. One of "fixed", "constrained", or "free":
 #'   - "fixed": lambda is fixed at the initial_lambda value.
@@ -32,7 +36,13 @@
 #'   value, so prefer it when lambda is meant to be estimated rather than
 #'   supplied.
 #' @param lower_bounds Numeric vector of length 4. Lower bounds for parameters (beta1, beta2, beta3, lambda).
-#' @param upper_bounds Numeric vector of length 4. Upper bounds for parameters (beta1, beta2, beta3, lambda).
+#' @param upper_bounds Numeric vector of length 4. Upper bounds for parameters
+#'   (beta1, beta2, beta3, lambda). The lambda ceiling is 2, which places the
+#'   curvature hump at 0.9 years; a ceiling of 0.5 bound the fit on roughly a
+#'   third of real month-end curves, and a clamped lambda is reported through
+#'   \code{at_bound} rather than silently. Raising it further buys in-sample
+#'   fit at the cost of comparability across dates, since factors estimated at
+#'   different lambda are not on the same scale.
 #' @param optimizer Character. The optimization method to use. Default is
 #'   "L-BFGS-B". Used by \code{method = "optim"} only.
 #' @param control List. Passed to \code{\link[stats]{optim}}'s \code{control}
@@ -102,10 +112,11 @@
 #'              as.numeric(latest[-1]), method = "profile")
 #'
 #' @export
-fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
+fit_ns_model <- function(maturities, yields,
+                         initial_lambda = ns_lambda(3.5),
                          lambda_constraint = "constrained",
                          lower_bounds = c(-0.1, -0.5, -0.5, 0.01),
-                         upper_bounds = c(0.2, 0.5, 0.5, 0.5),
+                         upper_bounds = c(0.2, 0.5, 0.5, 2),
                          optimizer = "L-BFGS-B",
                          method = c("optim", "profile"),
                          control = list()) {
@@ -240,10 +251,36 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
       } else {
         c(0.001, 5)
       }
+      # Grid first, then refine. The profiled objective is not unimodal in
+      # lambda: it has a local basin near zero, where the level and slope
+      # loadings both tend to 1, separated from the basin a real curve wants by
+      # a ridge. optimize() is a local bracketing search, so on its own it
+      # returns whichever basin its first three probes happen to straddle --
+      # which is how it came to miss the optimum of an exactly representable
+      # curve once the search interval was widened. A log-spaced scan locates
+      # the right basin, and optimize() then resolves it between the
+      # neighbouring grid points, which bracket the minimum.
+      #
+      # The scan is log-spaced because lambda acts as a reciprocal maturity: a
+      # step from 0.02 to 0.04 moves the curvature hump by 45 years, the same
+      # step from 1 to 1.02 moves it by half a month.
+      grid <- exp(seq(log(interval[1]), log(interval[2]),
+                      length.out = PROFILE_GRID_N))
+      grid_sse <- vapply(grid, profile_sse, numeric(1))
+      best <- which.min(grid_sse)
+
       # A tolerance well inside the edge test below, so a lambda that wants to
       # sit on a bound is resolved closely enough to be recognised as such.
-      lambda_hat <- stats::optimize(profile_sse, interval = interval,
-                                    tol = 1e-9)$minimum
+      lambda_hat <- stats::optimize(
+        profile_sse,
+        interval = c(grid[max(1L, best - 1L)],
+                     grid[min(length(grid), best + 1L)]),
+        tol = 1e-9
+      )$minimum
+
+      # The scan is evaluated at the endpoints, so it can see a minimum that
+      # the refinement, confined to the interior of a bracket, cannot reach.
+      if (grid_sse[best] < profile_sse(lambda_hat)) lambda_hat <- grid[best]
     }
 
     design <- ns_design(maturities, lambda_hat)
@@ -392,9 +429,8 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
 #' @param parallel Logical. If TRUE, use parallel processing to speed up computation.
 #' @param lambda_constraint Character. How to handle the lambda parameter (fixed, constrained, free).
 #' @param initial_lambda Numeric. Initial value for lambda, passed to
-#'   \code{\link{fit_ns_model}}. See \code{\link{ns_lambda}} on its units: the
-#'   0.0609 default is a month-denominated constant and maturities here are in
-#'   years.
+#'   \code{\link{fit_ns_model}}. The default places the curvature hump at 3.5
+#'   years; see \code{\link{ns_lambda}} on its units.
 #' @param show_progress Logical. If TRUE, display a progress bar.
 #' @param date_order Character. Row order of the returned \code{parameters} and
 #'   \code{fitted_yields}: \code{"input"} (the default) keeps the order the
@@ -462,7 +498,7 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
 #' @export
 fit_dns_model <- function(yield_data, n_days = 60, parallel = FALSE,
                           lambda_constraint = "constrained",
-                          initial_lambda = 0.0609,
+                          initial_lambda = ns_lambda(3.5),
                           show_progress = TRUE,
                           date_order = c("input", "ascending", "descending"),
                           drop_failed = TRUE,

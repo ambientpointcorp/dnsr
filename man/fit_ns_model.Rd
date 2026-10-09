@@ -7,10 +7,10 @@
 fit_ns_model(
   maturities,
   yields,
-  initial_lambda = 0.0609,
+  initial_lambda = ns_lambda(3.5),
   lambda_constraint = "constrained",
   lower_bounds = c(-0.1, -0.5, -0.5, 0.01),
-  upper_bounds = c(0.2, 0.5, 0.5, 0.5),
+  upper_bounds = c(0.2, 0.5, 0.5, 2),
   optimizer = "L-BFGS-B",
   method = c("optim", "profile"),
   control = list()
@@ -23,9 +23,13 @@ fit_ns_model(
 
 \item{initial_lambda}{Numeric. Initial value for the decay parameter lambda,
 per unit of maturity, and the value used outright when
-\code{lambda_constraint = "fixed"}. Maturities here are in years, so the
-0.0609 default is the Diebold-Li value for maturities in months and places
-the curvature hump at 29.4 years rather than months; see
+\code{lambda_constraint = "fixed"}. Maturities here are in years, and the
+default places the curvature hump at 3.5 years, near the middle of a
+Treasury curve; it is written as \code{ns_lambda(3.5)} so the number
+states its own meaning. Diebold and Li's 0.0609 is a month-denominated
+constant: in years it places the hump at 29.4 years, off the end of most
+curves, where the slope loading is nearly parallel to the level loading
+and the two factors are not separately identified. See
 \code{\link{ns_lambda}}.}
 
 \item{lambda_constraint}{Character. One of "fixed", "constrained", or "free":
@@ -45,7 +49,13 @@ supplied.}
 
 \item{lower_bounds}{Numeric vector of length 4. Lower bounds for parameters (beta1, beta2, beta3, lambda).}
 
-\item{upper_bounds}{Numeric vector of length 4. Upper bounds for parameters (beta1, beta2, beta3, lambda).}
+\item{upper_bounds}{Numeric vector of length 4. Upper bounds for parameters
+(beta1, beta2, beta3, lambda). The lambda ceiling is 2, which places the
+curvature hump at 0.9 years; a ceiling of 0.5 bound the fit on roughly a
+third of real month-end curves, and a clamped lambda is reported through
+\code{at_bound} rather than silently. Raising it further buys in-sample
+fit at the cost of comparability across dates, since factors estimated at
+different lambda are not on the same scale.}
 
 \item{optimizer}{Character. The optimization method to use. Default is
 "L-BFGS-B". Used by \code{method = "optim"} only.}
