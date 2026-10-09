@@ -558,3 +558,57 @@ test_that("without warm start, a date's fit is independent of the panel", {
     warm_full$parameters$lambda[warm_shared]
   )))
 })
+
+
+# ---- bounds reach the panel fitter ------------------------------------------
+
+test_that("fit_dns_model can widen the bounds its at_bound report complains about", {
+  data(treasury_yields)
+  month_ends <- treasury_yields[
+    !duplicated(format(treasury_yields$Date, "%Y-%m"), fromLast = TRUE),
+  ]
+
+  # Default ceiling on lambda is 0.5, and real curves reach it.
+  expect_warning(
+    clamped <- fit_dns_model(month_ends, n_days = nrow(month_ends),
+                             show_progress = FALSE, warm_start = FALSE),
+    "rest on a bound in some fits"
+  )
+  expect_true(any(clamped$at_bound[, "lambda"]))
+  expect_true(all(clamped$parameters$lambda <= 0.5 + 1e-8))
+
+  # Widening them clears it, which previously could not be done from here at
+  # all: the report named a problem the function gave no way to act on.
+  freed <- fit_dns_model(month_ends, n_days = nrow(month_ends),
+                         show_progress = FALSE, warm_start = FALSE,
+                         lower_bounds = c(-1, -1, -1, 0.01),
+                         upper_bounds = c(1, 1, 1, 5))
+  expect_false(any(freed$at_bound))
+  expect_gt(max(freed$parameters$lambda), 0.5)
+
+  # And the freed fit is better, which is why the clamp mattered.
+  expect_lt(stats::median(freed$parameters$rmse),
+            stats::median(clamped$parameters$rmse))
+})
+
+test_that("omitting the bounds leaves fit_ns_model's own defaults in force", {
+  # fit_ns_model() widens its beta box to the data scale only when both bounds
+  # are missing(), so forwarding its defaults explicitly would switch that off.
+  # Percentage-point yields are the case that needs it.
+  maturities <- c(0.25, 1, 2, 5, 10, 30)
+  loading <- (1 - exp(-0.3 * maturities)) / (0.3 * maturities)
+  dates <- seq(as.Date("2023-01-02"), by = "day", length.out = 6)
+
+  panel <- data.frame(Date = dates)
+  for (k in seq_along(maturities)) {
+    panel[[as.character(maturities[k])]] <-
+      (0.028 + 0.01 * loading[k]) * 100 + 1e-3 * seq_along(dates)
+  }
+
+  fit <- fit_dns_model(panel, n_days = nrow(panel), show_progress = FALSE)
+
+  # Beta1 is around 2.8 on this scale, far outside the default box of
+  # [-0.1, 0.2]; the widening is what keeps it off a bound.
+  expect_false(any(fit$at_bound[, c("beta1", "beta2", "beta3")]))
+  expect_gt(max(fit$parameters$beta1), 1)
+})

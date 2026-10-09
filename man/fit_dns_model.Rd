@@ -14,7 +14,9 @@ fit_dns_model(
   date_order = c("input", "ascending", "descending"),
   drop_failed = TRUE,
   warm_start = TRUE,
-  method = c("optim", "profile")
+  method = c("optim", "profile"),
+  lower_bounds = NULL,
+  upper_bounds = NULL
 )
 }
 \arguments{
@@ -58,6 +60,19 @@ panel they arrived in.}
 
 \item{method}{Character. Passed to \code{\link{fit_ns_model}}:
 \code{"optim"} (the default) or \code{"profile"}.}
+
+\item{lower_bounds, upper_bounds}{Numeric vectors of length 4, passed to
+\code{\link{fit_ns_model}} as the bounds on
+\code{(beta1, beta2, beta3, lambda)}. \code{NULL}, the default, leaves
+that function's own defaults in force, including its widening of the beta
+box to the data scale -- which it only applies when both bounds are left
+alone.
+
+Supply them when the \code{at_bound} report says a fit is clamped. The
+default ceiling on lambda is 0.5, and real Treasury curves reach it: on
+the panel in \code{\link{treasury_yields}} a freely estimated lambda
+rests there on roughly a quarter of dates. Without these arguments there
+was no way to act on that from here.}
 }
 \value{
 A list containing:

@@ -374,6 +374,18 @@ fit_ns_model <- function(maturities, yields, initial_lambda = 0.0609,
 #'   panel they arrived in.
 #' @param method Character. Passed to \code{\link{fit_ns_model}}:
 #'   \code{"optim"} (the default) or \code{"profile"}.
+#' @param lower_bounds,upper_bounds Numeric vectors of length 4, passed to
+#'   \code{\link{fit_ns_model}} as the bounds on
+#'   \code{(beta1, beta2, beta3, lambda)}. \code{NULL}, the default, leaves
+#'   that function's own defaults in force, including its widening of the beta
+#'   box to the data scale -- which it only applies when both bounds are left
+#'   alone.
+#'
+#'   Supply them when the \code{at_bound} report says a fit is clamped. The
+#'   default ceiling on lambda is 0.5, and real Treasury curves reach it: on
+#'   the panel in \code{\link{treasury_yields}} a freely estimated lambda
+#'   rests there on roughly a quarter of dates. Without these arguments there
+#'   was no way to act on that from here.
 #'
 #' @return A list containing:
 #'   - parameters: Data frame with model parameters for each date, plus
@@ -412,11 +424,14 @@ fit_dns_model <- function(yield_data, n_days = 60, parallel = FALSE,
                           date_order = c("input", "ascending", "descending"),
                           drop_failed = TRUE,
                           warm_start = TRUE,
-                          method = c("optim", "profile")) {
+                          method = c("optim", "profile"),
+                          lower_bounds = NULL, upper_bounds = NULL) {
 
   # Parameter validation
   date_order <- match.arg(date_order)
   method <- match.arg(method)
+  if (!is.null(lower_bounds)) checkmate::assert_numeric(lower_bounds, len = 4)
+  if (!is.null(upper_bounds)) checkmate::assert_numeric(upper_bounds, len = 4)
   checkmate::assert_data_frame(yield_data, min.rows = 1)
   checkmate::assert_names(names(yield_data), must.include = "Date")
   checkmate::assert_numeric(n_days, lower = 1, len = 1)
@@ -480,19 +495,27 @@ fit_dns_model <- function(yield_data, n_days = 60, parallel = FALSE,
       return(list(success = FALSE, message = "Not enough valid yield data"))
     }
 
+    # Bounds are forwarded only when the caller supplied them. fit_ns_model()
+    # decides whether to widen its beta box by asking whether both bounds are
+    # missing(), so passing its own defaults through explicitly would silently
+    # switch that off.
+    args <- list(
+      maturities = maturities,
+      yields = yields,
+      initial_lambda = lambda_init,
+      lambda_constraint = lambda_constraint,
+      method = method
+    )
+    if (!is.null(lower_bounds)) args$lower_bounds <- lower_bounds
+    if (!is.null(upper_bounds)) args$upper_bounds <- upper_bounds
+
     tryCatch(
       # The per-date bound warning is muffled here and reported once for the
       # whole panel below: a run over several hundred dates can hit a bound on
       # many of them, and one warning each would bury everything else. The
       # information is not lost -- it is in each fit's at_bound element.
       withCallingHandlers(
-        fit_ns_model(
-          maturities = maturities,
-          yields = yields,
-          initial_lambda = lambda_init,
-          lambda_constraint = lambda_constraint,
-          method = method
-        ),
+        do.call(fit_ns_model, args),
         warning = function(w) {
           if (grepl("rests on a parameter bound", conditionMessage(w))) {
             invokeRestart("muffleWarning")
@@ -618,7 +641,7 @@ fit_dns_model <- function(yield_data, n_days = 60, parallel = FALSE,
     warning(sprintf(
       paste0("Parameters rest on a bound in some fits: %s (of %d dates). ",
              "The factor decomposition is not identified on those dates; ",
-             "see the at_bound element of the result, widen ",
+             "see the at_bound element of the result, pass wider ",
              "lower_bounds/upper_bounds, or check the yield scale."),
       paste(sprintf("%s on %d", names(bound_counts)[bound_counts > 0],
                     bound_counts[bound_counts > 0]), collapse = ", "),

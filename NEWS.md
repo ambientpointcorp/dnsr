@@ -1,3 +1,20 @@
+# dnsr 0.4.3
+
+* `fit_dns_model()` gains `lower_bounds` and `upper_bounds`, forwarded to
+  `fit_ns_model()`. The panel fitter reports clamped fits in `at_bound` and
+  warns about them, but had no argument through which to do anything about it:
+  widening the box meant abandoning `fit_dns_model()` and looping
+  `fit_ns_model()` by hand. On the bundled `treasury_yields` month-ends a
+  freely estimated lambda rests on its default ceiling of 0.5 on 13 of 72
+  dates; passing wider bounds clears all 13 and improves the median fit.
+
+  Both default to `NULL` rather than to `fit_ns_model()`'s own numeric
+  defaults, and are forwarded only when supplied. That is deliberate:
+  `fit_ns_model()` decides whether to widen its beta box to the data scale by
+  asking whether both bounds are `missing()`, so passing its defaults through
+  explicitly would have switched that off and reintroduced the clamping on
+  percentage-point yields that 0.4.0 fixed. Both behaviours are tested.
+
 # dnsr 0.4.2
 
 The vignettes, which had been left at 0.1.0-era content while everything else
