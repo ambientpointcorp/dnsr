@@ -179,3 +179,110 @@ print.dns_simulation <- function(x, ...) {
   }
   invisible(x)
 }
+
+
+#' @title Print a one-step DNS state-space fit
+#' @param x A \code{dns_state_space} object.
+#' @param ... Ignored.
+#' @return \code{x}, invisibly.
+#' @export
+print.dns_state_space <- function(x, ...) {
+  cat("DNS one-step state-space fit (Kalman filter, maximum likelihood)\n")
+  cat(sprintf("  estimated on     %s to %s\n",
+              format(x$estimation_period[1]), format(x$estimation_period[2])))
+  cat(sprintf("  sampling         %s (dt = 1/%.1f), %d dates, %d maturities\n",
+              x$sampling, 1 / x$dt, x$n_dates, length(x$maturities)))
+  cat(sprintf("  lambda           %.4f%s (hump at %.2f years)\n",
+              x$lambda,
+              if (isTRUE(x$lambda_estimated)) " estimated" else " fixed",
+              ns_curvature_peak(x$lambda)))
+
+  rows <- lapply(c("beta1", "beta2", "beta3"), function(f) {
+    fac <- x[[f]]
+    c(kappa = fac$kappa, theta = fac$theta, sigma = fac$sigma,
+      half_life_y = fac$half_life)
+  })
+  table <- do.call(rbind, rows)
+  rownames(table) <- c("level (b1)", "slope (b2)", "curvature (b3)")
+  cat("\n")
+  print(round(table, 4))
+
+  cat(sprintf("\n  measurement sd   %.2f bp median across maturities\n",
+              stats::median(x$measurement_sd) * 10000))
+  cat(sprintf("  fit              %.2f bp rmse\n", x$rmse * 10000))
+  cat(sprintf("  logLik           %.2f on %d parameters (AIC %.1f, BIC %.1f)\n",
+              x$logLik, x$n_params, x$aic, x$bic))
+  cat(sprintf("  stable           %s\n", x$system_stability))
+  if (!identical(x$convergence, 0L) && !identical(x$convergence, 0)) {
+    cat(sprintf("  NOT CONVERGED    optim code %s; estimates are provisional\n",
+                x$convergence))
+  }
+  if (!is.null(x$two_step)) {
+    cat("  $two_step holds the two-step estimates used as starting values\n")
+  }
+  invisible(x)
+}
+
+#' @title Summarise a one-step DNS state-space fit
+#'
+#' @description
+#' Reports the shock correlation matrix, the measurement error and residual
+#' error by maturity, and the two-step estimates alongside the one-step ones.
+#'
+#' @param object A \code{dns_state_space} object.
+#' @param ... Ignored.
+#' @return A list with class \code{"summary.dns_state_space"}, invisibly
+#'   printed.
+#' @export
+summary.dns_state_space <- function(object, ...) {
+  comparison <- NULL
+  if (!is.null(object$two_step)) {
+    fields <- c("kappa", "theta", "sigma")
+    comparison <- do.call(rbind, lapply(c("beta1", "beta2", "beta3"),
+      function(f) {
+        one <- vapply(fields, function(k) object[[f]][[k]], numeric(1))
+        two <- vapply(fields, function(k) object$two_step[[f]][[k]], numeric(1))
+        stats::setNames(c(one, two), c(paste0("one_", fields),
+                                       paste0("two_", fields)))
+      }))
+    rownames(comparison) <- c("level (b1)", "slope (b2)", "curvature (b3)")
+  }
+
+  out <- list(
+    fit = object,
+    correlation = object$correlation,
+    measurement_bp = object$measurement_sd * 10000,
+    residual_bp_by_maturity = apply(object$residuals, 2,
+                                    function(r) sqrt(mean(r^2, na.rm = TRUE))) * 10000,
+    comparison = comparison
+  )
+  class(out) <- c("summary.dns_state_space", "list")
+  out
+}
+
+#' @title Print a one-step DNS state-space summary
+#' @param x A \code{summary.dns_state_space} object.
+#' @param ... Ignored.
+#' @return \code{x}, invisibly.
+#' @export
+print.summary.dns_state_space <- function(x, ...) {
+  print(x$fit)
+
+  cat("\nShock correlation\n")
+  print(round(x$correlation, 3))
+
+  cat("\nMeasurement error by maturity (bp)\n")
+  print(round(x$measurement_bp, 2))
+
+  cat("\nResidual rmse by maturity (bp)\n")
+  print(round(x$residual_bp_by_maturity, 2))
+
+  if (!is.null(x$comparison)) {
+    cat("\nOne step against the two-step estimates it started from\n")
+    print(round(x$comparison, 4))
+    cat("\nThe two-step estimates treat the fitted betas as observed when\n")
+    cat("they carry sampling error, which biases kappa upward. See\n")
+    cat("?estimate_dns_state_space on the precision of kappa and theta.\n")
+  }
+  invisible(x)
+}

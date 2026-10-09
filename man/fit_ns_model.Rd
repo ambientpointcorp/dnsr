@@ -43,19 +43,19 @@ With \code{method = "optim"} the search over lambda is weak: L-BFGS-B's
 numerical gradient is poorly scaled when the betas are around 0.05 and
 lambda around 0.5, and in practice lambda moves very little from
 \code{initial_lambda} even when unconstrained. \code{method = "profile"}
-searches lambda properly and reaches the same optimum from any starting
-value, so prefer it when lambda is meant to be estimated rather than
+searches lambda over its whole interval and reaches the same optimum from
+any starting value. Prefer it when lambda is estimated rather than
 supplied.}
 
 \item{lower_bounds}{Numeric vector of length 4. Lower bounds for parameters (beta1, beta2, beta3, lambda).}
 
 \item{upper_bounds}{Numeric vector of length 4. Upper bounds for parameters
 (beta1, beta2, beta3, lambda). The lambda ceiling is 2, which places the
-curvature hump at 0.9 years; a ceiling of 0.5 bound the fit on roughly a
-third of real month-end curves, and a clamped lambda is reported through
-\code{at_bound} rather than silently. Raising it further buys in-sample
-fit at the cost of comparability across dates, since factors estimated at
-different lambda are not on the same scale.}
+curvature hump at 0.9 years. A ceiling of 0.5 bound the fit on about a
+third of month-end curves in the bundled panel; a clamped lambda is
+reported through \code{at_bound}. Raising the ceiling further lowers
+in-sample error but reduces comparability across dates, since factors
+estimated at different lambda are not on the same scale.}
 
 \item{optimizer}{Character. The optimization method to use. Default is
 "L-BFGS-B". Used by \code{method = "optim"} only.}
@@ -67,18 +67,18 @@ lambda alone is searched over one dimension, by a log-spaced grid and then
 a refinement between the bracketing points. \code{"optim"} searches all
 four parameters numerically, as in versions before 0.6.0.
 
-Profiling is the default because it is better on every axis measured over
-200 curves from the bundled panel: a lower mean fit error from any
-starting lambda (5.57 bp against 5.74 from the package default, 8.52 from
-0.0609 and 5.97 from 1.5), exact independence of the starting value
-(a spread of 0.000 bp against 2.775), roughly a third of the run time, and
-no convergence failures. Where the two disagree on lambda by more than
-0.05 -- 15 of those 200 curves -- the profiled fit is the better of the two
-on all 15. It also needs no beta start values or beta bounds, which
-removes a class of boundary solution \code{"optim"} can return.
+Profiling is the default on the following comparison, measured over 200
+curves from the bundled panel. Mean fit error by starting lambda: 5.57 bp
+against 5.74 from the package default, 5.57 against 8.52 from 0.0609, and
+5.57 against 5.97 from 1.5. Spread across those three starting values:
+0.000 bp against 2.775. Run time: about one third. Convergence failures:
+none against three. On the 15 of 200 curves where the two differ in lambda
+by more than 0.05, the profiled fit has the lower error on all 15.
+Profiling also requires no beta start values or beta bounds, so it cannot
+return a beta resting on a bound.
 
 \code{"optim"} remains available and is unchanged apart from the scaled
-objective; pass it to reproduce a fit made with an earlier version.}
+objective. Pass it to reproduce a fit made with an earlier version.}
 
 \item{control}{List. Passed to \code{\link[stats]{optim}}'s \code{control}
 argument by \code{method = "optim"}; ignored by \code{method = "profile"},
