@@ -32,7 +32,13 @@ A list of ggplot objects:
 
 ``` r
 data(treasury_yields)
-dns_result <- fit_dns_model(treasury_yields, n_days = 250, show_progress = FALSE)
+# lambda is held fixed across the panel so that beta2 multiplies the same
+# loading at every date. With lambda estimated per date the betas are not a
+# comparable series, which is what a time series plot of them implies.
+dns_result <- fit_dns_model(treasury_yields, n_days = 250,
+                            show_progress = FALSE,
+                            lambda_constraint = "fixed",
+                            initial_lambda = ns_lambda(4))
 plots <- plot_factor_time_series(dns_result)
 plots$factors
 

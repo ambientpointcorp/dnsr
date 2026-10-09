@@ -233,9 +233,9 @@ fit
 #>   lambda           0.5124 fixed (hump at 3.50 years)
 #> 
 #>                 kappa   theta  sigma  half_life_y
-#> level (b1)     0.0000  0.0436 0.0000 1.751797e+09
-#> slope (b2)     0.7684  0.0064 0.0066 9.021000e-01
-#> curvature (b3) 7.9955 -0.0200 0.0535 8.670000e-02
+#> level (b1)     0.0000  0.0436 0.0000 1.819697e+09
+#> slope (b2)     0.7682  0.0064 0.0066 9.023000e-01
+#> curvature (b3) 7.9965 -0.0200 0.0535 8.670000e-02
 #> 
 #>   measurement sd   20.84 bp median across maturities
 #>   fit              19.39 bp rmse
@@ -252,9 +252,9 @@ summary(fit)
 #>   lambda           0.5124 fixed (hump at 3.50 years)
 #> 
 #>                 kappa   theta  sigma  half_life_y
-#> level (b1)     0.0000  0.0436 0.0000 1.751797e+09
-#> slope (b2)     0.7684  0.0064 0.0066 9.021000e-01
-#> curvature (b3) 7.9955 -0.0200 0.0535 8.670000e-02
+#> level (b1)     0.0000  0.0436 0.0000 1.819697e+09
+#> slope (b2)     0.7682  0.0064 0.0066 9.023000e-01
+#> curvature (b3) 7.9965 -0.0200 0.0535 8.670000e-02
 #> 
 #>   measurement sd   20.84 bp median across maturities
 #>   fit              19.39 bp rmse
@@ -279,8 +279,8 @@ summary(fit)
 #> One step against the two-step estimates it started from
 #>                one_kappa one_theta one_sigma two_kappa two_theta two_sigma
 #> level (b1)        0.0000    0.0436    0.0000    2.6700    0.0463    0.0096
-#> slope (b2)        0.7684    0.0064    0.0066    0.0012  -11.5237    0.0114
-#> curvature (b3)    7.9955   -0.0200    0.0535    7.1414   -0.0210    0.0413
+#> slope (b2)        0.7682    0.0064    0.0066    0.0012  -11.5237    0.0114
+#> curvature (b3)    7.9965   -0.0200    0.0535    7.1414   -0.0210    0.0413
 #> 
 #> The two-step estimates treat the fitted betas as observed when
 #> they carry sampling error, which biases kappa upward. See
@@ -289,27 +289,27 @@ summary(fit)
 # The smoothed factors have the same shape as the two-step betas
 head(fit$factors)
 #>         Date      beta1       beta2       beta3
-#> 1 2023-01-31 0.04363048 0.007135868 -0.03178250
-#> 2 2023-02-28 0.04363048 0.007546669 -0.01451167
-#> 3 2023-03-31 0.04363048 0.008568870 -0.03670753
-#> 4 2023-04-28 0.04363048 0.009862081 -0.04029334
-#> 5 2023-05-31 0.04363048 0.013336405 -0.03555928
-#> 6 2023-06-30 0.04363048 0.013779752 -0.02407751
+#> 1 2023-01-31 0.04363048 0.007135860 -0.03178261
+#> 2 2023-02-28 0.04363048 0.007546616 -0.01451132
+#> 3 2023-03-31 0.04363048 0.008568861 -0.03670761
+#> 4 2023-04-28 0.04363048 0.009862089 -0.04029340
+#> 5 2023-05-31 0.04363048 0.013336431 -0.03555936
+#> 6 2023-06-30 0.04363048 0.013779761 -0.02407746
 
 # The fit is accepted by the simulation parameter converter
 params <- dns_dynamics_to_sim_params(fit)
 str(params)
 #> List of 7
-#>  $ kappa       : num [1:3] 3.96e-10 7.68e-01 8.00
+#>  $ kappa       : num [1:3] 3.81e-10 7.68e-01 8.00
 #>  $ theta       : num [1:3] 0.0436 0.0064 -0.02
-#>  $ sigma       : num [1:3] 2.11e-10 6.59e-03 5.35e-02
+#>  $ sigma       : num [1:3] 2.28e-10 6.59e-03 5.35e-02
 #>  $ names       : chr [1:3] "Level" "Slope" "Curvature"
 #>  $ lambda      : num 0.512
 #>  $ correlation : num [1:3, 1:3] 1 0.372 -1 0.372 1 ...
 #>   ..- attr(*, "dimnames")=List of 2
 #>   .. ..$ : chr [1:3] "beta1" "beta2" "beta3"
 #>   .. ..$ : chr [1:3] "beta1" "beta2" "beta3"
-#>  $ kappa_matrix: num [1:3, 1:3] 3.96e-10 0.00 0.00 0.00 7.68e-01 ...
+#>  $ kappa_matrix: num [1:3, 1:3] 3.81e-10 0.00 0.00 0.00 7.68e-01 ...
 #>   ..- attr(*, "dimnames")=List of 2
 #>   .. ..$ : chr [1:3] "beta1" "beta2" "beta3"
 #>   .. ..$ : chr [1:3] "beta1" "beta2" "beta3"
