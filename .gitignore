@@ -15,3 +15,7 @@ cache/
 # pkgdown build output, generated from _pkgdown.yml
 docs
 .positai
+
+# R build and check artifacts
+*.tar.gz
+*.Rcheck/
