@@ -418,14 +418,24 @@ test_that("a boundary solution is reported rather than passed off as success", {
   loading <- (1 - exp(-0.3 * maturities)) / (0.3 * maturities)
   decimal <- 0.028 + 0.01 * loading
 
+  # A beta bound, so this is about method = "optim" specifically: profiling
+  # solves the betas by unconstrained least squares and does not consult their
+  # bounds at all, which is one of the reasons it is now the default.
   expect_warning(
-    clamped <- fit_ns_model(maturities, decimal,
+    clamped <- fit_ns_model(maturities, decimal, method = "optim",
                             lower_bounds = c(0.035, -0.5, -0.5, 0.01),
                             upper_bounds = c(0.200, 0.5, 0.5, 0.50)),
     "rests on a parameter bound"
   )
   expect_true(clamped$at_bound[["beta1"]])
   expect_equal(clamped$parameters[["beta1"]], 0.035)
+
+  # The profiled fit reaches the interior solution the box was hiding.
+  profiled <- fit_ns_model(maturities, decimal, method = "profile",
+                           lower_bounds = c(0.035, -0.5, -0.5, 0.01),
+                           upper_bounds = c(0.200, 0.5, 0.5, 0.50))
+  expect_false(any(profiled$at_bound))
+  expect_equal(profiled$parameters[["beta1"]], 0.028, tolerance = 1e-3)
 })
 
 

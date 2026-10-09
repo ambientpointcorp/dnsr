@@ -93,6 +93,31 @@ scan is log-spaced because lambda acts as a reciprocal maturity: 0.02 to 0.04
 moves the hump 45 years, 1.00 to 1.02 moves it half a month. On an exactly
 representable curve it recovers lambda to six decimals and fits to 1e-12.
 
+## ...and is now the default
+
+With the grid in place, profiling is better than `optim` on every axis measured
+over 200 curves from the bundled panel, so it becomes the default `method` for
+`fit_ns_model()` and `fit_dns_model()`:
+
+| starting lambda | optim | profile |
+|---|---|---|
+| 0.0609 | 8.516 bp | 5.566 bp |
+| `ns_lambda(3.5)` | 5.741 bp | 5.566 bp |
+| 1.5 | 5.966 bp | 5.566 bp |
+
+Profiling is exactly independent of the starting value, a spread of 0.000 bp
+against 2.775; takes about a third of the time; and had no convergence failures
+where `optim` had three. The two agree on the typical curve -- median
+difference in lambda of 1e-5 -- and where they disagree by more than 0.05,
+which is 15 of the 200, the profiled fit is the better of the two on all 15.
+
+`method = "optim"` remains available and is unchanged apart from the scaled
+objective. Pass it to reproduce a fit made with an earlier version. One
+behavioural difference worth knowing: profiling solves the betas by
+unconstrained least squares, so it does not consult `lower_bounds` and
+`upper_bounds` for the betas and cannot return a beta resting on one. Only
+`lambda` is bounded under profiling.
+
 # dnsr 0.5.0
 
 Documentation, plus one additive pair of helpers. No existing function changes

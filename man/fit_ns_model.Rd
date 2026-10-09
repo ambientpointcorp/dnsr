@@ -12,7 +12,7 @@ fit_ns_model(
   lower_bounds = c(-0.1, -0.5, -0.5, 0.01),
   upper_bounds = c(0.2, 0.5, 0.5, 2),
   optimizer = "L-BFGS-B",
-  method = c("optim", "profile"),
+  method = c("profile", "optim"),
   control = list()
 )
 }
@@ -60,14 +60,25 @@ different lambda are not on the same scale.}
 \item{optimizer}{Character. The optimization method to use. Default is
 "L-BFGS-B". Used by \code{method = "optim"} only.}
 
-\item{method}{Character. How to solve the fit. \code{"optim"} (the default)
-searches all four parameters numerically, as in earlier versions.
-\code{"profile"} exploits the fact that the curve is linear in the betas
-once lambda is fixed: the betas are solved by least squares in closed form
-and only lambda is searched, over one dimension. The profiled fit does not
-depend on beta start values and does not need beta bounds, which removes
-the boundary solutions \code{"optim"} can return; it is the recommended
-setting and is expected to become the default.}
+\item{method}{Character. How to solve the fit. \code{"profile"} (the
+default) exploits the fact that the curve is linear in the betas once
+lambda is fixed: the betas are solved by least squares in closed form, and
+lambda alone is searched over one dimension, by a log-spaced grid and then
+a refinement between the bracketing points. \code{"optim"} searches all
+four parameters numerically, as in versions before 0.6.0.
+
+Profiling is the default because it is better on every axis measured over
+200 curves from the bundled panel: a lower mean fit error from any
+starting lambda (5.57 bp against 5.74 from the package default, 8.52 from
+0.0609 and 5.97 from 1.5), exact independence of the starting value
+(a spread of 0.000 bp against 2.775), roughly a third of the run time, and
+no convergence failures. Where the two disagree on lambda by more than
+0.05 -- 15 of those 200 curves -- the profiled fit is the better of the two
+on all 15. It also needs no beta start values or beta bounds, which
+removes a class of boundary solution \code{"optim"} can return.
+
+\code{"optim"} remains available and is unchanged apart from the scaled
+objective; pass it to reproduce a fit made with an earlier version.}
 
 \item{control}{List. Passed to \code{\link[stats]{optim}}'s \code{control}
 argument by \code{method = "optim"}; ignored by \code{method = "profile"},
