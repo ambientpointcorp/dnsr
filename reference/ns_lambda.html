@@ -11,7 +11,7 @@ lambda; ns_curvature_peak() goes back."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,11 +87,14 @@ nothing about a lambda on its own says which. Stating a maturity instead
 settles it: <code>ns_lambda(30)</code> on a curve measured in months and
 <code>ns_lambda(2.5)</code> on the same curve measured in years describe the same
 shape.</p>
-<p>That also explains the package default of 0.0609, which is the value
-Diebold and Li published for maturities in <strong>months</strong>, where it places
-the hump at 29.4 months. The functions in this package take maturities in
-<strong>years</strong>, so the same number places it at 29.4 <em>years</em>;
-<code>ns_curvature_peak()</code> reports that directly.</p>
+<p>That also explains why this package does not use Diebold and Li's 0.0609 as
+its default. That is the value they published for maturities in
+<strong>months</strong>, where it places the hump at 29.4 months. The functions here
+take maturities in <strong>years</strong>, so the same number places it at 29.4
+<em>years</em> – off the end of most curves, where the slope loading is
+nearly parallel to the level loading and the two factors are not separately
+identified. <code>ns_curvature_peak()</code> reports that directly, and the
+package default is written as <code>ns_lambda(3.5)</code> instead.</p>
 <p>Two cautions. The peak is flat – at half or double the nominal peak
 maturity the loading is still about 85 percent of its maximum – so lambda
 is not tightly determined by this choice, and the apparent precision of the

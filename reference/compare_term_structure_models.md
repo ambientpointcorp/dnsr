@@ -13,7 +13,9 @@ compare_term_structure_models(
   spline_df = 5,
   units = c("bp", "decimal"),
   ufr = NULL,
-  alpha = 0.1
+  alpha = 0.1,
+  initial_lambda = ns_lambda(3.5),
+  method = c("profile", "optim")
 )
 ```
 
@@ -53,6 +55,21 @@ compare_term_structure_models(
 - alpha:
 
   Numeric. Smith-Wilson convergence speed toward `ufr`.
+
+- initial_lambda, method:
+
+  Passed to
+  [`fit_ns_model`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
+  for the "NS" row. They are exposed because the Nelson-Siegel row is
+  the only one whose fit depends on a search, and so the only one that
+  can be misrepresented by a weak one: before 0.6.0 this table reported
+  8.87 bp for Nelson-Siegel on the bundled panel, behind the cubic
+  spline's 5.56, purely because of the lambda default and the stopping
+  rule. It now reports 4.43, ahead of the spline. Passing
+  `initial_lambda = 0.0609, method = "optim"` restores the old
+  configuration, which reports 8.57 – near the old row but not identical
+  to it, because the objective is now scaled and the search therefore
+  stops in a different place.
 
 ## Value
 
@@ -102,7 +119,7 @@ comparison <- compare_term_structure_models(treasury_yields,
                                             models = c("NS", "NSS", "Spline"))
 comparison$metrics
 #>                    Model     RMSE      MAE  MaxError
-#> 1          Nelson-Siegel 8.873355 7.506098 15.404612
+#> 1          Nelson-Siegel 4.431432 3.887569  8.700489
 #> 2 Nelson-Siegel-Svensson 3.542643 2.502529  8.621915
 #> 3           Cubic Spline 5.561295 3.995767 11.985578
 comparison$plot

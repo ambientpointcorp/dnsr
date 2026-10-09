@@ -1,5 +1,174 @@
 # Changelog
 
+## dnsr 0.6.0
+
+The lambda search, and the default it starts from. Every function keeps
+its signature, its return structure and its class; the numbers move,
+because the old ones came from a search that was not searching and a
+default that placed the curvature hump past the end of most curves.
+Passing `initial_lambda = 0.0609, method = "optim"` reproduces the
+previous results.
+
+### The cross-sectional search now actually searches
+
+[`fit_ns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
+minimised a sum of squared errors of about 1e-5. L-BFGS-B stops when the
+reduction in the objective, divided by `max(|f|, 1)`, falls below
+`factr * .Machine$double.eps`; with an objective that small the
+denominator is the constant 1, so the relative test became an absolute
+one of roughly 2.2e-9 and the search reported success after as few as 17
+function evaluations, having barely moved off its start value.
+
+The objective is now minimised in squared basis points, which puts it
+above 1 where that test measures what it is documented to measure. A
+positive constant does not move the minimiser, so the reported
+parameters are those of the same problem; only the stopping decision
+changes. On the bundled panel, mean fit error over 120 sampled dates:
+
+|                           | before    | after    |
+|---------------------------|-----------|----------|
+| `initial_lambda = 0.0609` | 10.308 bp | 9.715 bp |
+| `initial_lambda = 0.5124` | 9.617 bp  | 8.620 bp |
+
+Two consequences worth knowing. Warm starting in
+[`fit_dns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_dns_model.md)
+now changes speed rather than answers, because both chains reach the
+same optimum. And a search that moves can reach the degenerate
+small-lambda corner, where the level and slope loadings both tend to 1,
+the design goes collinear and the curvature factor runs to its bound;
+from the old 0.0609 default that happened on 6 of 72 month-ends. The
+next section is why.
+
+[`fit_ns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
+also gained a `control` argument, forwarded to
+[`optim()`](https://rdrr.io/r/stats/optim.html). It is appended to the
+signature, so positional calls are unaffected.
+
+### The default lambda, and the range it is searched over
+
+`lambda` is per unit of maturity, and every function here takes
+maturities in **years**. The old default of 0.0609 is the value Diebold
+and Li published for maturities in **months**: in years it places the
+curvature hump at 29.4 years, off the end of most curves, where the
+slope loading is nearly parallel to the level loading and the level and
+slope factors are not separately identified.
+
+Every lambda default in the package is now `ns_lambda(3.5)`, which
+places the hump at 3.5 years, near the middle of a Treasury curve. It is
+written that way so the number states its own meaning. On the bundled
+panel, fitting a single fixed lambda to all 1,501 curves:
+
+|                                   | 0.0609   | ns_lambda(3.5) |
+|-----------------------------------|----------|----------------|
+| panel fit error                   | 20.69 bp | 11.81 bp       |
+| median day-to-day change in beta1 | 17.92 bp | 3.55 bp        |
+| median day-to-day change in beta2 | 18.11 bp | 3.88 bp        |
+| median day-to-day change in beta3 | 37.21 bp | 8.61 bp        |
+| largest beta3                     | 2386 bp  | 491 bp         |
+
+The factor columns matter more than the fit column: at 0.0609 the
+factors were five times noisier day to day and beta3 reached 23.9
+percentage points, because two of the three were not identified and
+wandered in offsetting directions. This package exists to estimate their
+dynamics, so that was the real cost.
+
+The ceiling on lambda rises from 0.5 to 2. At 0.5 it bound roughly a
+third of real month-end curves, and raising the default start made that
+worse before it made it better. Fitting the 72 month-ends in the bundled
+panel:
+
+|                          | median fit error | fits resting on a bound |
+|--------------------------|------------------|-------------------------|
+| old default, old ceiling | 6.051 bp         | 25 of 71                |
+| new default, old ceiling | 4.685 bp         | 29 of 72                |
+| new default, new ceiling | 4.467 bp         | 9 of 72                 |
+
+A clamped lambda is still reported through `at_bound` rather than
+silently. The ceiling is 2 rather than higher on purpose: lambda is a
+shape parameter, and factors estimated at different lambda are not on
+the same scale, so buying in-sample fit by letting it float freely costs
+the comparability across dates that the dynamics step depends on.
+
+### method = “profile” searches lambda globally
+
+The profiled objective is not unimodal: a basin near zero, where both
+the level and slope loadings tend to 1, is separated from the basin a
+real curve wants by a ridge.
+[`optimize()`](https://rdrr.io/r/stats/optimize.html) is a local
+bracketing search, so it returned whichever basin its first three probes
+happened to straddle. Widening the interval to the new ceiling made this
+visible – it began missing the optimum of a curve that is exactly
+Nelson-Siegel, with a known answer.
+
+`method = "profile"` now scans a log-spaced grid over the lambda
+interval and refines between the neighbouring grid points, which bracket
+the minimum. The scan is log-spaced because lambda acts as a reciprocal
+maturity: 0.02 to 0.04 moves the hump 45 years, 1.00 to 1.02 moves it
+half a month. On an exactly representable curve it recovers lambda to
+six decimals and fits to 1e-12.
+
+### …and is now the default
+
+With the grid in place, profiling is better than `optim` on every axis
+measured over 200 curves from the bundled panel, so it becomes the
+default `method` for
+[`fit_ns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
+and
+[`fit_dns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_dns_model.md):
+
+| starting lambda  | optim    | profile  |
+|------------------|----------|----------|
+| 0.0609           | 8.516 bp | 5.566 bp |
+| `ns_lambda(3.5)` | 5.741 bp | 5.566 bp |
+| 1.5              | 5.966 bp | 5.566 bp |
+
+Profiling is exactly independent of the starting value, a spread of
+0.000 bp against 2.775; takes about a third of the time; and had no
+convergence failures where `optim` had three. The two agree on the
+typical curve – median difference in lambda of 1e-5 – and where they
+disagree by more than 0.05, which is 15 of the 200, the profiled fit is
+the better of the two on all 15.
+
+`method = "optim"` remains available and is unchanged apart from the
+scaled objective. Pass it to reproduce a fit made with an earlier
+version. One behavioural difference worth knowing: profiling solves the
+betas by unconstrained least squares, so it does not consult
+`lower_bounds` and `upper_bounds` for the betas and cannot return a beta
+resting on one. Only `lambda` is bounded under profiling.
+
+### The model comparison no longer understates Nelson-Siegel
+
+[`compare_term_structure_models()`](https://ambientpointcorp.github.io/dnsr/reference/compare_term_structure_models.md)
+fits the Nelson-Siegel row with
+[`fit_ns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md),
+so it inherited both defects above. On the bundled panel it reported
+8.87 bp for Nelson-Siegel, behind the cubic spline’s 5.56; it now
+reports 4.43, ahead of it. Nothing about the comparison changed – the
+row was simply being fitted badly.
+
+It gains `initial_lambda` and `method`, forwarded to
+[`fit_ns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
+and appended to the signature, so the row is reproducible rather than
+merely better. The other rows take no search and are unaffected.
+
+### Documentation that the above made wrong
+
+The introduction vignette asserted that the default lambda ceiling of
+0.5 was binding on the latest curve, and printed an `at_bound` report to
+prove it. With the ceiling at 2 nothing is clamped, so that section now
+imposes the old ceiling explicitly to show what a clamped fit looks like
+– lambda resting on 0.5 at 4.95 bp against 4.43 unclamped – which makes
+the same point without depending on a defect. The free-lambda range
+quoted for the panel (0.04 to 0.50) and the cost of fixing lambda (14 bp
+against 7) are both remeasured: 0.17 to 2.00, and 6.4 bp against 4.5.
+
+The table comparing lambda = 0.0609 with 0.448 is unchanged, because it
+passes both values explicitly; two rounded entries are corrected to the
+measured 29.4 years and -0.928. The README no longer says 0.0609
+“remains this package’s default for continuity”, and the YUIMA vignette
+passes `ns_lambda(3.5)` rather than 0.0609 in its three simulation
+calls.
+
 ## dnsr 0.5.0
 
 Documentation, plus one additive pair of helpers. No existing function

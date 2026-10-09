@@ -9,7 +9,7 @@ Converts DNS factors into discount factors.
 ## Usage
 
 ``` r
-dns_discount_factors(factors, maturities, lambda = 0.0609)
+dns_discount_factors(factors, maturities, lambda = ns_lambda(3.5))
 ```
 
 ## Arguments
@@ -29,10 +29,12 @@ dns_discount_factors(factors, maturities, lambda = 0.0609)
 - lambda:
 
   Numeric. DNS decay parameter lambda, per unit of maturity. Maturities
-  here are in years, so the 0.0609 default is the Diebold-Li value for
-  maturities in months and places the curvature hump at 29.4 years
-  rather than months; see
+  here are in years, and the default places the curvature hump at 3.5
+  years, near the middle of a Treasury curve. It is written as
+  `ns_lambda(3.5)` so the number states its own meaning; see
   [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
+  Diebold and Li's 0.0609 is a month-denominated constant and in years
+  would place that hump at 29.4 years.
 
 ## Value
 
@@ -65,6 +67,6 @@ factors <- matrix(curve$parameters[1:3], nrow = 1)
 
 discount <- dns_discount_factors(factors, maturities, curve$parameters[["lambda"]])
 round(discount[1, ], 4)
-#>  [1] 0.9965 0.9894 0.9789 0.9581 0.9172 0.8775 0.8016 0.7307 0.6339 0.3876
-#> [11] 0.2338
+#>  [1] 0.9964 0.9892 0.9788 0.9587 0.9195 0.8804 0.8031 0.7296 0.6300 0.3850
+#> [11] 0.2352
 ```

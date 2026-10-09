@@ -10,7 +10,7 @@ simulate_dns_yield_curves(
   params,
   initial_factors,
   maturities,
-  lambda = 0.0609,
+  lambda = ns_lambda(3.5),
   time_horizon = 10,
   n_steps = 120,
   n_paths = 100,
@@ -38,10 +38,12 @@ simulate_dns_yield_curves(
 - lambda:
 
   Numeric. DNS decay parameter lambda, per unit of maturity. Maturities
-  here are in years, so the 0.0609 default is the Diebold-Li value for
-  maturities in months and places the curvature hump at 29.4 years
-  rather than months; see
+  here are in years, and the default places the curvature hump at 3.5
+  years, near the middle of a Treasury curve. It is written as
+  `ns_lambda(3.5)` so the number states its own meaning; see
   [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
+  Diebold and Li's 0.0609 is a month-denominated constant and in years
+  would place that hump at 29.4 years.
 
 - time_horizon:
 
@@ -109,5 +111,5 @@ sim_result
 #>   terminal factors 0.0353  -0.0181  0.0107
 #>     (sd)           0.0152  0.0143  0.0193
 #>   maturities        0.25  0.50  1.00  2.00  3.00  5.00  7.00 10.00 20.00 30.00
-#>   terminal yields  1.73  1.76  1.80  1.88  1.96  2.10  2.22  2.39  2.78  3.01 (% mean)
+#>   terminal yields  1.89  2.04  2.30  2.68  2.92  3.18  3.29  3.38  3.45  3.48 (% mean)
 ```

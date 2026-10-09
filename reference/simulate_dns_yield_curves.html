@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,7 +49,7 @@
 <span>  <span class="va">params</span>,</span>
 <span>  <span class="va">initial_factors</span>,</span>
 <span>  <span class="va">maturities</span>,</span>
-<span>  lambda <span class="op">=</span> <span class="fl">0.0609</span>,</span>
+<span>  lambda <span class="op">=</span> <span class="fu"><a href="ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">3.5</span><span class="op">)</span>,</span>
 <span>  time_horizon <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  n_steps <span class="op">=</span> <span class="fl">120</span>,</span>
 <span>  n_paths <span class="op">=</span> <span class="fl">100</span>,</span>
@@ -78,9 +78,11 @@
 
 <dt id="arg-lambda">lambda<a class="anchor" aria-label="anchor" href="#arg-lambda"></a></dt>
 <dd><p>Numeric. DNS decay parameter lambda, per unit of maturity.
-Maturities here are in years, so the 0.0609 default is the Diebold-Li
-value for maturities in months and places the curvature hump at 29.4
-years rather than months; see <code><a href="ns_lambda.html">ns_lambda</a></code>.</p></dd>
+Maturities here are in years, and the default places the curvature hump at
+3.5 years, near the middle of a Treasury curve. It is written as
+<code>ns_lambda(3.5)</code> so the number states its own meaning; see
+<code><a href="ns_lambda.html">ns_lambda</a></code>. Diebold and Li's 0.0609 is a month-denominated
+constant and in years would place that hump at 29.4 years.</p></dd>
 
 
 <dt id="arg-time-horizon">time_horizon<a class="anchor" aria-label="anchor" href="#arg-time-horizon"></a></dt>
@@ -142,7 +144,7 @@ see <code><a href="simulate_dns_factors.html">simulate_dns_factors</a></code>.</
 <span class="r-out co"><span class="r-pr">#&gt;</span>   terminal factors 0.0353  -0.0181  0.0107</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     (sd)           0.0152  0.0143  0.0193</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   maturities        0.25  0.50  1.00  2.00  3.00  5.00  7.00 10.00 20.00 30.00</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   terminal yields  1.73  1.76  1.80  1.88  1.96  2.10  2.22  2.39  2.78  3.01 (% mean)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   terminal yields  1.89  2.04  2.30  2.68  2.92  3.18  3.29  3.38  3.45  3.48 (% mean)</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

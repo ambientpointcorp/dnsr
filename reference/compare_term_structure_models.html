@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,7 +52,9 @@
 <span>  spline_df <span class="op">=</span> <span class="fl">5</span>,</span>
 <span>  units <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"bp"</span>, <span class="st">"decimal"</span><span class="op">)</span>,</span>
 <span>  ufr <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  alpha <span class="op">=</span> <span class="fl">0.1</span></span>
+<span>  alpha <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span>  initial_lambda <span class="op">=</span> <span class="fu"><a href="ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">3.5</span><span class="op">)</span>,</span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"profile"</span>, <span class="st">"optim"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -95,6 +97,19 @@ to the longest observed yield.</p></dd>
 <dt id="arg-alpha">alpha<a class="anchor" aria-label="anchor" href="#arg-alpha"></a></dt>
 <dd><p>Numeric. Smith-Wilson convergence speed toward <code>ufr</code>.</p></dd>
 
+
+<dt id="arg-initial-lambda-method">initial_lambda, method<a class="anchor" aria-label="anchor" href="#arg-initial-lambda-method"></a></dt>
+<dd><p>Passed to <code><a href="fit_ns_model.html">fit_ns_model</a></code> for the
+"NS" row. They are exposed because the Nelson-Siegel row is the only one
+whose fit depends on a search, and so the only one that can be
+misrepresented by a weak one: before 0.6.0 this table reported 8.87 bp for
+Nelson-Siegel on the bundled panel, behind the cubic spline's 5.56, purely
+because of the lambda default and the stopping rule. It now reports 4.43,
+ahead of the spline. Passing <code>initial_lambda = 0.0609,
+  method = "optim"</code> restores the old configuration, which reports 8.57 –
+near the old row but not identical to it, because the objective is now
+scaled and the search therefore stops in a different place.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -136,7 +151,7 @@ loadings become identical and the betas are no longer identified.</p>
 <span class="r-in"><span>                                            models <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"NS"</span>, <span class="st">"NSS"</span>, <span class="st">"Spline"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">comparison</span><span class="op">$</span><span class="va">metrics</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                    Model     RMSE      MAE  MaxError</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1          Nelson-Siegel 8.873355 7.506098 15.404612</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1          Nelson-Siegel 4.431432 3.887569  8.700489</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2 Nelson-Siegel-Svensson 3.542643 2.502529  8.621915</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 3           Cubic Spline 5.561295 3.995767 11.985578</span>
 <span class="r-in"><span><span class="va">comparison</span><span class="op">$</span><span class="va">plot</span></span></span>

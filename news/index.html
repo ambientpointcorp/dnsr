@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,97 @@
       <small>Source: <a href="https://github.com/ambientpointcorp/dnsr/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.0" id="dnsr-060">dnsr 0.6.0<a class="anchor" aria-label="anchor" href="#dnsr-060"></a></h2>
+<p>The lambda search, and the default it starts from. Every function keeps its signature, its return structure and its class; the numbers move, because the old ones came from a search that was not searching and a default that placed the curvature hump past the end of most curves. Passing <code>initial_lambda = 0.0609, method = "optim"</code> reproduces the previous results.</p>
+<div class="section level3">
+<h3 id="the-cross-sectional-search-now-actually-searches-0-6-0">The cross-sectional search now actually searches<a class="anchor" aria-label="anchor" href="#the-cross-sectional-search-now-actually-searches-0-6-0"></a></h3>
+<p><code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> minimised a sum of squared errors of about 1e-5. L-BFGS-B stops when the reduction in the objective, divided by <code>max(|f|, 1)</code>, falls below <code>factr * .Machine$double.eps</code>; with an objective that small the denominator is the constant 1, so the relative test became an absolute one of roughly 2.2e-9 and the search reported success after as few as 17 function evaluations, having barely moved off its start value.</p>
+<p>The objective is now minimised in squared basis points, which puts it above 1 where that test measures what it is documented to measure. A positive constant does not move the minimiser, so the reported parameters are those of the same problem; only the stopping decision changes. On the bundled panel, mean fit error over 120 sampled dates:</p>
+<table class="table"><thead><tr><th></th>
+<th>before</th>
+<th>after</th>
+</tr></thead><tbody><tr><td><code>initial_lambda = 0.0609</code></td>
+<td>10.308 bp</td>
+<td>9.715 bp</td>
+</tr><tr><td><code>initial_lambda = 0.5124</code></td>
+<td>9.617 bp</td>
+<td>8.620 bp</td>
+</tr></tbody></table><p>Two consequences worth knowing. Warm starting in <code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code> now changes speed rather than answers, because both chains reach the same optimum. And a search that moves can reach the degenerate small-lambda corner, where the level and slope loadings both tend to 1, the design goes collinear and the curvature factor runs to its bound; from the old 0.0609 default that happened on 6 of 72 month-ends. The next section is why.</p>
+<p><code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> also gained a <code>control</code> argument, forwarded to <code><a href="https://rdrr.io/r/stats/optim.html" class="external-link">optim()</a></code>. It is appended to the signature, so positional calls are unaffected.</p>
+</div>
+<div class="section level3">
+<h3 id="the-default-lambda-and-the-range-it-is-searched-over-0-6-0">The default lambda, and the range it is searched over<a class="anchor" aria-label="anchor" href="#the-default-lambda-and-the-range-it-is-searched-over-0-6-0"></a></h3>
+<p><code>lambda</code> is per unit of maturity, and every function here takes maturities in <strong>years</strong>. The old default of 0.0609 is the value Diebold and Li published for maturities in <strong>months</strong>: in years it places the curvature hump at 29.4 years, off the end of most curves, where the slope loading is nearly parallel to the level loading and the level and slope factors are not separately identified.</p>
+<p>Every lambda default in the package is now <code>ns_lambda(3.5)</code>, which places the hump at 3.5 years, near the middle of a Treasury curve. It is written that way so the number states its own meaning. On the bundled panel, fitting a single fixed lambda to all 1,501 curves:</p>
+<table class="table"><thead><tr><th></th>
+<th>0.0609</th>
+<th>ns_lambda(3.5)</th>
+</tr></thead><tbody><tr><td>panel fit error</td>
+<td>20.69 bp</td>
+<td>11.81 bp</td>
+</tr><tr><td>median day-to-day change in beta1</td>
+<td>17.92 bp</td>
+<td>3.55 bp</td>
+</tr><tr><td>median day-to-day change in beta2</td>
+<td>18.11 bp</td>
+<td>3.88 bp</td>
+</tr><tr><td>median day-to-day change in beta3</td>
+<td>37.21 bp</td>
+<td>8.61 bp</td>
+</tr><tr><td>largest beta3</td>
+<td>2386 bp</td>
+<td>491 bp</td>
+</tr></tbody></table><p>The factor columns matter more than the fit column: at 0.0609 the factors were five times noisier day to day and beta3 reached 23.9 percentage points, because two of the three were not identified and wandered in offsetting directions. This package exists to estimate their dynamics, so that was the real cost.</p>
+<p>The ceiling on lambda rises from 0.5 to 2. At 0.5 it bound roughly a third of real month-end curves, and raising the default start made that worse before it made it better. Fitting the 72 month-ends in the bundled panel:</p>
+<table class="table"><thead><tr><th></th>
+<th>median fit error</th>
+<th>fits resting on a bound</th>
+</tr></thead><tbody><tr><td>old default, old ceiling</td>
+<td>6.051 bp</td>
+<td>25 of 71</td>
+</tr><tr><td>new default, old ceiling</td>
+<td>4.685 bp</td>
+<td>29 of 72</td>
+</tr><tr><td>new default, new ceiling</td>
+<td>4.467 bp</td>
+<td>9 of 72</td>
+</tr></tbody></table><p>A clamped lambda is still reported through <code>at_bound</code> rather than silently. The ceiling is 2 rather than higher on purpose: lambda is a shape parameter, and factors estimated at different lambda are not on the same scale, so buying in-sample fit by letting it float freely costs the comparability across dates that the dynamics step depends on.</p>
+</div>
+<div class="section level3">
+<h3 id="method--profile-searches-lambda-globally-0-6-0">method = “profile” searches lambda globally<a class="anchor" aria-label="anchor" href="#method--profile-searches-lambda-globally-0-6-0"></a></h3>
+<p>The profiled objective is not unimodal: a basin near zero, where both the level and slope loadings tend to 1, is separated from the basin a real curve wants by a ridge. <code><a href="https://rdrr.io/r/stats/optimize.html" class="external-link">optimize()</a></code> is a local bracketing search, so it returned whichever basin its first three probes happened to straddle. Widening the interval to the new ceiling made this visible – it began missing the optimum of a curve that is exactly Nelson-Siegel, with a known answer.</p>
+<p><code>method = "profile"</code> now scans a log-spaced grid over the lambda interval and refines between the neighbouring grid points, which bracket the minimum. The scan is log-spaced because lambda acts as a reciprocal maturity: 0.02 to 0.04 moves the hump 45 years, 1.00 to 1.02 moves it half a month. On an exactly representable curve it recovers lambda to six decimals and fits to 1e-12.</p>
+</div>
+<div class="section level3">
+<h3 id="and-is-now-the-default-0-6-0">…and is now the default<a class="anchor" aria-label="anchor" href="#and-is-now-the-default-0-6-0"></a></h3>
+<p>With the grid in place, profiling is better than <code>optim</code> on every axis measured over 200 curves from the bundled panel, so it becomes the default <code>method</code> for <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> and <code><a href="../reference/fit_dns_model.html">fit_dns_model()</a></code>:</p>
+<table class="table"><thead><tr><th>starting lambda</th>
+<th>optim</th>
+<th>profile</th>
+</tr></thead><tbody><tr><td>0.0609</td>
+<td>8.516 bp</td>
+<td>5.566 bp</td>
+</tr><tr><td><code>ns_lambda(3.5)</code></td>
+<td>5.741 bp</td>
+<td>5.566 bp</td>
+</tr><tr><td>1.5</td>
+<td>5.966 bp</td>
+<td>5.566 bp</td>
+</tr></tbody></table><p>Profiling is exactly independent of the starting value, a spread of 0.000 bp against 2.775; takes about a third of the time; and had no convergence failures where <code>optim</code> had three. The two agree on the typical curve – median difference in lambda of 1e-5 – and where they disagree by more than 0.05, which is 15 of the 200, the profiled fit is the better of the two on all 15.</p>
+<p><code>method = "optim"</code> remains available and is unchanged apart from the scaled objective. Pass it to reproduce a fit made with an earlier version. One behavioural difference worth knowing: profiling solves the betas by unconstrained least squares, so it does not consult <code>lower_bounds</code> and <code>upper_bounds</code> for the betas and cannot return a beta resting on one. Only <code>lambda</code> is bounded under profiling.</p>
+</div>
+<div class="section level3">
+<h3 id="the-model-comparison-no-longer-understates-nelson-siegel-0-6-0">The model comparison no longer understates Nelson-Siegel<a class="anchor" aria-label="anchor" href="#the-model-comparison-no-longer-understates-nelson-siegel-0-6-0"></a></h3>
+<p><code><a href="../reference/compare_term_structure_models.html">compare_term_structure_models()</a></code> fits the Nelson-Siegel row with <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code>, so it inherited both defects above. On the bundled panel it reported 8.87 bp for Nelson-Siegel, behind the cubic spline’s 5.56; it now reports 4.43, ahead of it. Nothing about the comparison changed – the row was simply being fitted badly.</p>
+<p>It gains <code>initial_lambda</code> and <code>method</code>, forwarded to <code><a href="../reference/fit_ns_model.html">fit_ns_model()</a></code> and appended to the signature, so the row is reproducible rather than merely better. The other rows take no search and are unaffected.</p>
+</div>
+<div class="section level3">
+<h3 id="documentation-that-the-above-made-wrong-0-6-0">Documentation that the above made wrong<a class="anchor" aria-label="anchor" href="#documentation-that-the-above-made-wrong-0-6-0"></a></h3>
+<p>The introduction vignette asserted that the default lambda ceiling of 0.5 was binding on the latest curve, and printed an <code>at_bound</code> report to prove it. With the ceiling at 2 nothing is clamped, so that section now imposes the old ceiling explicitly to show what a clamped fit looks like – lambda resting on 0.5 at 4.95 bp against 4.43 unclamped – which makes the same point without depending on a defect. The free-lambda range quoted for the panel (0.04 to 0.50) and the cost of fixing lambda (14 bp against 7) are both remeasured: 0.17 to 2.00, and 6.4 bp against 4.5.</p>
+<p>The table comparing lambda = 0.0609 with 0.448 is unchanged, because it passes both values explicitly; two rounded entries are corrected to the measured 29.4 years and -0.928. The README no longer says 0.0609 “remains this package’s default for continuity”, and the YUIMA vignette passes <code>ns_lambda(3.5)</code> rather than 0.0609 in its three simulation calls.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.0" id="dnsr-050">dnsr 0.5.0<a class="anchor" aria-label="anchor" href="#dnsr-050"></a></h2>
 <p>Documentation, plus one additive pair of helpers. No existing function changes what it computes.</p>

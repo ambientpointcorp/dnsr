@@ -42,11 +42,14 @@ maturity instead settles it: `ns_lambda(30)` on a curve measured in
 months and `ns_lambda(2.5)` on the same curve measured in years describe
 the same shape.
 
-That also explains the package default of 0.0609, which is the value
-Diebold and Li published for maturities in **months**, where it places
-the hump at 29.4 months. The functions in this package take maturities
-in **years**, so the same number places it at 29.4 *years*;
-`ns_curvature_peak()` reports that directly.
+That also explains why this package does not use Diebold and Li's 0.0609
+as its default. That is the value they published for maturities in
+**months**, where it places the hump at 29.4 months. The functions here
+take maturities in **years**, so the same number places it at 29.4
+*years* – off the end of most curves, where the slope loading is nearly
+parallel to the level loading and the two factors are not separately
+identified. `ns_curvature_peak()` reports that directly, and the package
+default is written as `ns_lambda(3.5)` instead.
 
 Two cautions. The peak is flat – at half or double the nominal peak
 maturity the loading is still about 85 percent of its maximum – so

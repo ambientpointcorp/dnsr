@@ -162,25 +162,25 @@ dynamics
 #>   structure        diagonal
 #> 
 #>                 kappa se_kappa   theta  sigma half_life_y
-#> level (b1)     2.7753   0.9339  0.0346 0.0304      0.2498
-#> slope (b2)     2.6320   0.8909 -0.0083 0.0330      0.2634
-#> curvature (b3) 2.1218   0.8195 -0.0043 0.0579      0.3267
+#> level (b1)     0.3511   0.4551  0.0390 0.0111      1.9743
+#> slope (b2)     0.5730   0.4411 -0.0060 0.0146      1.2097
+#> curvature (b3) 4.5136   1.1292 -0.0129 0.0578      0.1536
 #> 
-#>   stable           TRUE (eigenvalues 2.775 2.632 2.122)
+#>   stable           TRUE (eigenvalues 4.514 0.573 0.351)
 
 # Standard errors show how weakly kappa is identified in a short sample
 dynamics$beta1$se
-#>       kappa       theta       sigma 
-#> 0.933902253 0.004531378 0.002584906 
+#>        kappa        theta        sigma 
+#> 0.4550856550 0.0162310889 0.0009470412 
 dynamics$beta1$half_life_ci
 #>     lower     upper 
-#> 0.1504970 0.7335731 
+#> 0.5576263       Inf 
 
 # The full VAR(1), in which a shock to one factor pulls the others
 full <- estimate_dns_dynamics(dns_result$parameters, structure = "full")
 round(full$kappa_matrix, 3)
 #>        beta1  beta2  beta3
-#> beta1  3.746 -3.289 -0.031
-#> beta2 -5.999  3.251 -1.160
-#> beta3  4.821  4.394  4.768
+#> beta1  1.403 -0.976 -0.559
+#> beta2 -3.333  2.518 -0.714
+#> beta3 -0.662  0.892  4.510
 ```

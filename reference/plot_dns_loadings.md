@@ -7,7 +7,7 @@ Creates a plot showing the factor loadings of the DNS model.
 ``` r
 plot_dns_loadings(
   maturities = seq(0, 30, length.out = 100),
-  lambda = 0.0609,
+  lambda = ns_lambda(3.5),
   show_labels = TRUE
 )
 ```
@@ -21,10 +21,12 @@ plot_dns_loadings(
 - lambda:
 
   Numeric. DNS decay parameter lambda, per unit of maturity. Maturities
-  here are in years, so the 0.0609 default is the Diebold-Li value for
-  maturities in months and places the curvature hump at 29.4 years
-  rather than months; see
+  here are in years, and the default places the curvature hump at 3.5
+  years, near the middle of a Treasury curve. It is written as
+  `ns_lambda(3.5)` so the number states its own meaning; see
   [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
+  Diebold and Li's 0.0609 is a month-denominated constant and in years
+  would place that hump at 29.4 years.
 
 - show_labels:
 

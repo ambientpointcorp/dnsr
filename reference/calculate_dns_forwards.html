@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -45,7 +45,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">calculate_dns_forwards</span><span class="op">(</span><span class="va">factors</span>, <span class="va">maturities</span>, lambda <span class="op">=</span> <span class="fl">0.0609</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">calculate_dns_forwards</span><span class="op">(</span><span class="va">factors</span>, <span class="va">maturities</span>, lambda <span class="op">=</span> <span class="fu"><a href="ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">3.5</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -62,9 +62,11 @@
 
 <dt id="arg-lambda">lambda<a class="anchor" aria-label="anchor" href="#arg-lambda"></a></dt>
 <dd><p>Numeric. DNS decay parameter lambda, per unit of maturity.
-Maturities here are in years, so the 0.0609 default is the Diebold-Li
-value for maturities in months and places the curvature hump at 29.4
-years rather than months; see <code><a href="ns_lambda.html">ns_lambda</a></code>.</p></dd>
+Maturities here are in years, and the default places the curvature hump at
+3.5 years, near the middle of a Treasury curve. It is written as
+<code>ns_lambda(3.5)</code> so the number states its own meaning; see
+<code><a href="ns_lambda.html">ns_lambda</a></code>. Diebold and Li's 0.0609 is a month-denominated
+constant and in years would place that hump at 29.4 years.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -85,15 +87,15 @@ $$f(m) = \beta_1 + \beta_2 e^{-\lambda m} + \beta_3 \lambda m e^{-\lambda m}$$</
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Forwards sit above spots where the curve is rising</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>  spot <span class="op">=</span> <span class="fu"><a href="calculate_dns_yields.html">calculate_dns_yields</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">maturities</span>, <span class="fl">0.0609</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span>,</span></span>
-<span class="r-in"><span>  forward <span class="op">=</span> <span class="fu">calculate_dns_forwards</span><span class="op">(</span><span class="va">factors</span>, <span class="va">maturities</span>, <span class="fl">0.0609</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span></span></span>
+<span class="r-in"><span>  spot <span class="op">=</span> <span class="fu"><a href="calculate_dns_yields.html">calculate_dns_yields</a></span><span class="op">(</span><span class="va">factors</span>, <span class="va">maturities</span>, <span class="fu"><a href="ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">3.5</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span>,</span></span>
+<span class="r-in"><span>  forward <span class="op">=</span> <span class="fu">calculate_dns_forwards</span><span class="op">(</span><span class="va">factors</span>, <span class="va">maturities</span>, <span class="fu"><a href="ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">3.5</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>               [,1]       [,2]       [,3]       [,4]       [,5]       [,6]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> spot    0.02015129 0.02030067 0.02059382 0.02115838 0.02169523 0.02269159</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> forward 0.02030162 0.02059755 0.02117275 0.02225928 0.02326569 0.02506045</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> spot    0.02121510 0.02230819 0.02417968 0.02694920 0.02881798 0.03101193</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> forward 0.02236687 0.02438143 0.02754859 0.03145546 0.03342735 0.03483095</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>               [,7]       [,8]       [,9]      [,10]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> spot    0.02359372 0.02479111 0.02773946 0.02960272</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> forward 0.02659789 0.02849774 0.03236423 0.03405635</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> spot    0.03215056 0.03303012 0.03402399 0.03434942</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> forward 0.03508122 0.03506322 0.03500128 0.03500001</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

@@ -5,7 +5,7 @@ Calculates instantaneous forward rates based on DNS factors.
 ## Usage
 
 ``` r
-calculate_dns_forwards(factors, maturities, lambda = 0.0609)
+calculate_dns_forwards(factors, maturities, lambda = ns_lambda(3.5))
 ```
 
 ## Arguments
@@ -21,10 +21,12 @@ calculate_dns_forwards(factors, maturities, lambda = 0.0609)
 - lambda:
 
   Numeric. DNS decay parameter lambda, per unit of maturity. Maturities
-  here are in years, so the 0.0609 default is the Diebold-Li value for
-  maturities in months and places the curvature hump at 29.4 years
-  rather than months; see
+  here are in years, and the default places the curvature hump at 3.5
+  years, near the middle of a Treasury curve. It is written as
+  `ns_lambda(3.5)` so the number states its own meaning; see
   [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
+  Diebold and Li's 0.0609 is a month-denominated constant and in years
+  would place that hump at 29.4 years.
 
 ## Value
 
@@ -44,13 +46,13 @@ factors <- matrix(c(0.035, -0.015, 0.005), nrow = 1)
 
 # Forwards sit above spots where the curve is rising
 rbind(
-  spot = calculate_dns_yields(factors, maturities, 0.0609)[1, ],
-  forward = calculate_dns_forwards(factors, maturities, 0.0609)[1, ]
+  spot = calculate_dns_yields(factors, maturities, ns_lambda(3.5))[1, ],
+  forward = calculate_dns_forwards(factors, maturities, ns_lambda(3.5))[1, ]
 )
 #>               [,1]       [,2]       [,3]       [,4]       [,5]       [,6]
-#> spot    0.02015129 0.02030067 0.02059382 0.02115838 0.02169523 0.02269159
-#> forward 0.02030162 0.02059755 0.02117275 0.02225928 0.02326569 0.02506045
+#> spot    0.02121510 0.02230819 0.02417968 0.02694920 0.02881798 0.03101193
+#> forward 0.02236687 0.02438143 0.02754859 0.03145546 0.03342735 0.03483095
 #>               [,7]       [,8]       [,9]      [,10]
-#> spot    0.02359372 0.02479111 0.02773946 0.02960272
-#> forward 0.02659789 0.02849774 0.03236423 0.03405635
+#> spot    0.03215056 0.03303012 0.03402399 0.03434942
+#> forward 0.03508122 0.03506322 0.03500128 0.03500001
 ```

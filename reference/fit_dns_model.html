@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,12 +50,12 @@
 <span>  n_days <span class="op">=</span> <span class="fl">60</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  lambda_constraint <span class="op">=</span> <span class="st">"constrained"</span>,</span>
-<span>  initial_lambda <span class="op">=</span> <span class="fl">0.0609</span>,</span>
+<span>  initial_lambda <span class="op">=</span> <span class="fu"><a href="ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">3.5</span><span class="op">)</span>,</span>
 <span>  show_progress <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  date_order <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"input"</span>, <span class="st">"ascending"</span>, <span class="st">"descending"</span><span class="op">)</span>,</span>
 <span>  drop_failed <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  warm_start <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"optim"</span>, <span class="st">"profile"</span><span class="op">)</span>,</span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"profile"</span>, <span class="st">"optim"</span><span class="op">)</span>,</span>
 <span>  lower_bounds <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  upper_bounds <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -87,9 +87,8 @@ The window is selected by date, so it does not depend on the row order of
 
 <dt id="arg-initial-lambda">initial_lambda<a class="anchor" aria-label="anchor" href="#arg-initial-lambda"></a></dt>
 <dd><p>Numeric. Initial value for lambda, passed to
-<code><a href="fit_ns_model.html">fit_ns_model</a></code>. See <code><a href="ns_lambda.html">ns_lambda</a></code> on its units: the
-0.0609 default is a month-denominated constant and maturities here are in
-years.</p></dd>
+<code><a href="fit_ns_model.html">fit_ns_model</a></code>. The default places the curvature hump at 3.5
+years; see <code><a href="ns_lambda.html">ns_lambda</a></code> on its units.</p></dd>
 
 
 <dt id="arg-show-progress">show_progress<a class="anchor" aria-label="anchor" href="#arg-show-progress"></a></dt>
@@ -125,7 +124,7 @@ panel they arrived in.</p></dd>
 
 <dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
 <dd><p>Character. Passed to <code><a href="fit_ns_model.html">fit_ns_model</a></code>:
-<code>"optim"</code> (the default) or <code>"profile"</code>.</p></dd>
+<code>"profile"</code> (the default) or <code>"optim"</code>.</p></dd>
 
 
 <dt id="arg-lower-bounds-upper-bounds">lower_bounds, upper_bounds<a class="anchor" aria-label="anchor" href="#arg-lower-bounds-upper-bounds"></a></dt>
@@ -170,45 +169,43 @@ they can be fed directly to <code><a href="estimate_dns_dynamics.html">estimate_
 <span class="r-in"><span><span class="co"># The 60 most recent curves. The window is chosen by date, so passing the</span></span></span>
 <span class="r-in"><span><span class="co"># panel in either row order selects the same dates.</span></span></span>
 <span class="r-in"><span><span class="va">dns_result</span> <span class="op">&lt;-</span> <span class="fu">fit_dns_model</span><span class="op">(</span><span class="va">treasury_yields</span>, n_days <span class="op">=</span> <span class="fl">60</span>, show_progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
-<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Parameters rest on a bound in some fits: lambda on 38 (of 60 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, pass wider lower_bounds/upper_bounds, or check the yield scale.</span>
 <span class="r-in"><span><span class="va">dns_result</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Dynamic Nelson-Siegel fit</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   60 curves, 2024-10-03 to 2024-12-31</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   maturities         0.0833  0.2500  0.5000  1.0000  2.0000  3.0000  5.0000  7.0000 10.0000 20.0000 30.0000</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   rmse              5.10 bp median, 8.04 bp worst</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   lambda            0.5000 median</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   rmse              4.66 bp median, 6.00 bp worst</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   lambda            0.6169 median</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   success rate      100.0%</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   at bound          lambda on 38 (see $at_bound)</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">dns_result</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Dynamic Nelson-Siegel fit</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   60 curves, 2024-10-03 to 2024-12-31, 100.0% fitted</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Factors:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>             min     mean      max      sd</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> beta1   0.04489  0.04717  0.05004 0.00129</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> beta2  -0.00638 -0.00041  0.00411 0.00274</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> beta3  -0.03911 -0.02026 -0.00849 0.00742</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> lambda  0.49157  0.49818  0.50000 0.00330</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> beta1   0.04370  0.04662  0.04946 0.00138</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> beta2  -0.00541  0.00051  0.00663 0.00317</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> beta3  -0.03712 -0.01996 -0.00849 0.00676</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> lambda  0.43897  0.59613  0.71243 0.07070</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Fit error (basis points):</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   0%  50%  95% 100% </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3.54 5.10 6.89 8.04 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3.43 4.66 5.66 6.00 </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">dns_result</span><span class="op">$</span><span class="va">parameters</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>         Date      beta1       beta2       beta3    lambda         rmse</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 2024-10-03 0.04521919 0.004054147 -0.03910520 0.5000000 0.0008035182</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 2024-10-04 0.04535422 0.004113613 -0.03217322 0.4999392 0.0007049269</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 2024-10-07 0.04564922 0.003862919 -0.03097348 0.5000000 0.0006886792</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4 2024-10-08 0.04589329 0.003333767 -0.03120564 0.5000000 0.0006464879</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 2024-10-09 0.04603303 0.003073846 -0.03007115 0.5000000 0.0005936956</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6 2024-10-10 0.04663458 0.002660000 -0.03174549 0.4999100 0.0006832128</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 2024-10-03 0.04369712 0.006632190 -0.03712005 0.6637689 0.0005648560</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 2024-10-04 0.04426872 0.005914538 -0.03051946 0.6350888 0.0005868570</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 2024-10-07 0.04469211 0.005432235 -0.02950361 0.6196247 0.0006002489</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 2024-10-08 0.04490083 0.004971963 -0.02983858 0.6250754 0.0005367854</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 2024-10-09 0.04513430 0.004548608 -0.02885400 0.6155153 0.0004960210</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6 2024-10-10 0.04546945 0.004615492 -0.03037229 0.6503208 0.0005303682</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   beta1_change  beta2_change  beta3_change</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1           NA            NA            NA</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 0.0001350378  5.946613e-05  0.0069319757</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 0.0002949941 -2.506935e-04  0.0011997457</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4 0.0002440761 -5.291528e-04 -0.0002321662</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 0.0001397336 -2.599206e-04  0.0011344893</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6 0.0006015521 -4.138464e-04 -0.0016743405</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 0.0005716004 -7.176525e-04  0.0066005939</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 0.0004233859 -4.823030e-04  0.0010158445</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 0.0002087232 -4.602721e-04 -0.0003349675</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 0.0002334718 -4.233552e-04  0.0009845740</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6 0.0003351438  6.688393e-05 -0.0015182897</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

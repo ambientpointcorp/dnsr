@@ -33,7 +33,6 @@ A list of ggplot objects:
 ``` r
 data(treasury_yields)
 dns_result <- fit_dns_model(treasury_yields, n_days = 250, show_progress = FALSE)
-#> Warning: Parameters rest on a bound in some fits: lambda on 107 (of 250 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, pass wider lower_bounds/upper_bounds, or check the yield scale.
 plots <- plot_factor_time_series(dns_result)
 plots$factors
 

@@ -10,12 +10,12 @@ fit_dns_model(
   n_days = 60,
   parallel = FALSE,
   lambda_constraint = "constrained",
-  initial_lambda = 0.0609,
+  initial_lambda = ns_lambda(3.5),
   show_progress = TRUE,
   date_order = c("input", "ascending", "descending"),
   drop_failed = TRUE,
   warm_start = TRUE,
-  method = c("optim", "profile"),
+  method = c("profile", "optim"),
   lower_bounds = NULL,
   upper_bounds = NULL
 )
@@ -48,10 +48,9 @@ fit_dns_model(
 
   Numeric. Initial value for lambda, passed to
   [`fit_ns_model`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md).
-  See
+  The default places the curvature hump at 3.5 years; see
   [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md)
-  on its units: the 0.0609 default is a month-denominated constant and
-  maturities here are in years.
+  on its units.
 
 - show_progress:
 
@@ -88,7 +87,7 @@ fit_dns_model(
 
   Character. Passed to
   [`fit_ns_model`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md):
-  `"optim"` (the default) or `"profile"`.
+  `"profile"` (the default) or `"optim"`.
 
 - lower_bounds, upper_bounds:
 
@@ -143,43 +142,41 @@ data(treasury_yields)
 # The 60 most recent curves. The window is chosen by date, so passing the
 # panel in either row order selects the same dates.
 dns_result <- fit_dns_model(treasury_yields, n_days = 60, show_progress = FALSE)
-#> Warning: Parameters rest on a bound in some fits: lambda on 38 (of 60 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, pass wider lower_bounds/upper_bounds, or check the yield scale.
 dns_result
 #> Dynamic Nelson-Siegel fit
 #>   60 curves, 2024-10-03 to 2024-12-31
 #>   maturities         0.0833  0.2500  0.5000  1.0000  2.0000  3.0000  5.0000  7.0000 10.0000 20.0000 30.0000
-#>   rmse              5.10 bp median, 8.04 bp worst
-#>   lambda            0.5000 median
+#>   rmse              4.66 bp median, 6.00 bp worst
+#>   lambda            0.6169 median
 #>   success rate      100.0%
-#>   at bound          lambda on 38 (see $at_bound)
 summary(dns_result)
 #> Dynamic Nelson-Siegel fit
 #>   60 curves, 2024-10-03 to 2024-12-31, 100.0% fitted
 #> 
 #> Factors:
 #>             min     mean      max      sd
-#> beta1   0.04489  0.04717  0.05004 0.00129
-#> beta2  -0.00638 -0.00041  0.00411 0.00274
-#> beta3  -0.03911 -0.02026 -0.00849 0.00742
-#> lambda  0.49157  0.49818  0.50000 0.00330
+#> beta1   0.04370  0.04662  0.04946 0.00138
+#> beta2  -0.00541  0.00051  0.00663 0.00317
+#> beta3  -0.03712 -0.01996 -0.00849 0.00676
+#> lambda  0.43897  0.59613  0.71243 0.07070
 #> 
 #> Fit error (basis points):
 #>   0%  50%  95% 100% 
-#> 3.54 5.10 6.89 8.04 
+#> 3.43 4.66 5.66 6.00 
 
 head(dns_result$parameters)
 #>         Date      beta1       beta2       beta3    lambda         rmse
-#> 1 2024-10-03 0.04521919 0.004054147 -0.03910520 0.5000000 0.0008035182
-#> 2 2024-10-04 0.04535422 0.004113613 -0.03217322 0.4999392 0.0007049269
-#> 3 2024-10-07 0.04564922 0.003862919 -0.03097348 0.5000000 0.0006886792
-#> 4 2024-10-08 0.04589329 0.003333767 -0.03120564 0.5000000 0.0006464879
-#> 5 2024-10-09 0.04603303 0.003073846 -0.03007115 0.5000000 0.0005936956
-#> 6 2024-10-10 0.04663458 0.002660000 -0.03174549 0.4999100 0.0006832128
+#> 1 2024-10-03 0.04369712 0.006632190 -0.03712005 0.6637689 0.0005648560
+#> 2 2024-10-04 0.04426872 0.005914538 -0.03051946 0.6350888 0.0005868570
+#> 3 2024-10-07 0.04469211 0.005432235 -0.02950361 0.6196247 0.0006002489
+#> 4 2024-10-08 0.04490083 0.004971963 -0.02983858 0.6250754 0.0005367854
+#> 5 2024-10-09 0.04513430 0.004548608 -0.02885400 0.6155153 0.0004960210
+#> 6 2024-10-10 0.04546945 0.004615492 -0.03037229 0.6503208 0.0005303682
 #>   beta1_change  beta2_change  beta3_change
 #> 1           NA            NA            NA
-#> 2 0.0001350378  5.946613e-05  0.0069319757
-#> 3 0.0002949941 -2.506935e-04  0.0011997457
-#> 4 0.0002440761 -5.291528e-04 -0.0002321662
-#> 5 0.0001397336 -2.599206e-04  0.0011344893
-#> 6 0.0006015521 -4.138464e-04 -0.0016743405
+#> 2 0.0005716004 -7.176525e-04  0.0066005939
+#> 3 0.0004233859 -4.823030e-04  0.0010158445
+#> 4 0.0002087232 -4.602721e-04 -0.0003349675
+#> 5 0.0002334718 -4.233552e-04  0.0009845740
+#> 6 0.0003351438  6.688393e-05 -0.0015182897
 ```

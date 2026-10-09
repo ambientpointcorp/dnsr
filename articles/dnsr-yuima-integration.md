@@ -248,7 +248,7 @@ maturities <- c(0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30)
 yields <- calculate_dns_yields(
   factors = sim_result$factors,
   maturities = maturities,
-  lambda = 0.0609
+  lambda = ns_lambda(3.5)
 )
 
 # Look at yields for the first path at selected time points
@@ -258,13 +258,13 @@ colnames(yields_subset) <- maturities
 rownames(yields_subset) <- paste("Year", round(sim_result$time[t_points], 1))
 print(yields_subset * 100)  # Convert to percentage
 #>              0.25      0.5        1        2        3        5        7
-#> Year 0   2.015129 2.030067 2.059382 2.115838 2.169523 2.269159 2.359372
-#> Year 2.4 1.166288 1.174233 1.190091 1.221659 1.252997 1.314849 1.375412
-#> Year 4.9 1.929303 1.958888 2.016763 2.127516 2.231927 2.423179 2.593217
+#> Year 0   2.121510 2.230819 2.417968 2.694920 2.881798 3.101193 3.215056
+#> Year 2.4 1.224908 1.290455 1.417329 1.649438 1.849229 2.157597 2.370040
+#> Year 4.9 2.138590 2.349992 2.701890 3.192237 3.493507 3.796587 3.917951
 #>                10       20       30
-#> Year 0   2.479111 2.773946 2.960272
-#> Year 2.4 1.463453 1.728643 1.948117
-#> Year 4.9 2.813655 3.323258 3.609737
+#> Year 0   3.303012 3.402399 3.434942
+#> Year 2.4 2.573267 2.847184 2.941393
+#> Year 4.9 3.984878 4.030144 4.041868
 ```
 
 Let’s visualize the yield curves for one path at different points in
@@ -312,7 +312,7 @@ if (has_yuima) {
     params = params,
     initial_factors = initial_factors,
     maturities = maturities,
-    lambda = 0.0609,
+    lambda = ns_lambda(3.5),
     time_horizon = 5,
     n_steps = 60,
     n_paths = 10,
@@ -328,7 +328,7 @@ if (has_yuima) {
     params = params,
     initial_factors = initial_factors,
     maturities = maturities,
-    lambda = 0.0609,
+    lambda = ns_lambda(3.5),
     time_horizon = 5,
     n_steps = 60,
     n_paths = 10,
@@ -354,17 +354,17 @@ summary_df <- data.frame(
 )
 
 print(summary_df)
-#>    Maturity     Mean         Q10      Q90
-#> 1      0.25 1.741309 -0.07748767 3.014730
-#> 2      0.50 1.768829 -0.04081854 3.036205
-#> 3      1.00 1.822722  0.03115286 3.077986
-#> 4      2.00 1.926080  0.16979840 3.157038
-#> 5      3.00 2.023812  0.30169286 3.230402
-#> 6      5.00 2.203654  0.54663432 3.433452
-#> 7      7.00 2.364579  0.76424974 3.656808
-#> 8     10.00 2.574967  1.00079424 3.943087
-#> 9     20.00 3.072752  1.58892453 4.583655
-#> 10    30.00 3.365621  1.96669500 4.919506
+#>    Maturity     Mean       Q10      Q90
+#> 1      0.25 1.936432 0.1837309 3.164874
+#> 2      0.50 2.134700 0.4523574 3.336740
+#> 3      1.00 2.468023 0.8798680 3.798452
+#> 4      2.00 2.942728 1.4303312 4.422759
+#> 5      3.00 3.244976 1.8068340 4.786635
+#> 6      5.00 3.568919 2.2575120 5.115706
+#> 7      7.00 3.715109 2.6405303 5.212468
+#> 8     10.00 3.811662 3.0400261 5.114575
+#> 9     20.00 3.902231 3.2839945 4.931057
+#> 10    30.00 3.929996 3.3534757 4.863527
 ```
 
 Let’s visualize the distribution of final yield curves:

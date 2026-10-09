@@ -9,7 +9,7 @@ Fits the Nelson-Siegel model to a single yield curve (cross-section) for a speci
 
     <a class="navbar-brand me-2" href="../index.html">dnsr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,12 +51,13 @@ Fits the Nelson-Siegel model to a single yield curve (cross-section) for a speci
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">fit_ns_model</span><span class="op">(</span></span>
 <span>  <span class="va">maturities</span>,</span>
 <span>  <span class="va">yields</span>,</span>
-<span>  initial_lambda <span class="op">=</span> <span class="fl">0.0609</span>,</span>
+<span>  initial_lambda <span class="op">=</span> <span class="fu"><a href="ns_lambda.html">ns_lambda</a></span><span class="op">(</span><span class="fl">3.5</span><span class="op">)</span>,</span>
 <span>  lambda_constraint <span class="op">=</span> <span class="st">"constrained"</span>,</span>
 <span>  lower_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.1</span>, <span class="op">-</span><span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.5</span>, <span class="fl">0.01</span><span class="op">)</span>,</span>
-<span>  upper_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span><span class="op">)</span>,</span>
+<span>  upper_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="fl">2</span><span class="op">)</span>,</span>
 <span>  optimizer <span class="op">=</span> <span class="st">"L-BFGS-B"</span>,</span>
-<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"optim"</span>, <span class="st">"profile"</span><span class="op">)</span></span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"profile"</span>, <span class="st">"optim"</span><span class="op">)</span>,</span>
+<span>  control <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -75,9 +76,13 @@ Fits the Nelson-Siegel model to a single yield curve (cross-section) for a speci
 <dt id="arg-initial-lambda">initial_lambda<a class="anchor" aria-label="anchor" href="#arg-initial-lambda"></a></dt>
 <dd><p>Numeric. Initial value for the decay parameter lambda,
 per unit of maturity, and the value used outright when
-<code>lambda_constraint = "fixed"</code>. Maturities here are in years, so the
-0.0609 default is the Diebold-Li value for maturities in months and places
-the curvature hump at 29.4 years rather than months; see
+<code>lambda_constraint = "fixed"</code>. Maturities here are in years, and the
+default places the curvature hump at 3.5 years, near the middle of a
+Treasury curve; it is written as <code>ns_lambda(3.5)</code> so the number
+states its own meaning. Diebold and Li's 0.0609 is a month-denominated
+constant: in years it places the hump at 29.4 years, off the end of most
+curves, where the slope loading is nearly parallel to the level loading
+and the two factors are not separately identified. See
 <code><a href="ns_lambda.html">ns_lambda</a></code>.</p></dd>
 
 
@@ -99,7 +104,13 @@ supplied.</p></dd>
 
 
 <dt id="arg-upper-bounds">upper_bounds<a class="anchor" aria-label="anchor" href="#arg-upper-bounds"></a></dt>
-<dd><p>Numeric vector of length 4. Upper bounds for parameters (beta1, beta2, beta3, lambda).</p></dd>
+<dd><p>Numeric vector of length 4. Upper bounds for parameters
+(beta1, beta2, beta3, lambda). The lambda ceiling is 2, which places the
+curvature hump at 0.9 years; a ceiling of 0.5 bound the fit on roughly a
+third of real month-end curves, and a clamped lambda is reported through
+<code>at_bound</code> rather than silently. Raising it further buys in-sample
+fit at the cost of comparability across dates, since factors estimated at
+different lambda are not on the same scale.</p></dd>
 
 
 <dt id="arg-optimizer">optimizer<a class="anchor" aria-label="anchor" href="#arg-optimizer"></a></dt>
@@ -108,14 +119,32 @@ supplied.</p></dd>
 
 
 <dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
-<dd><p>Character. How to solve the fit. <code>"optim"</code> (the default)
-searches all four parameters numerically, as in earlier versions.
-<code>"profile"</code> exploits the fact that the curve is linear in the betas
-once lambda is fixed: the betas are solved by least squares in closed form
-and only lambda is searched, over one dimension. The profiled fit does not
-depend on beta start values and does not need beta bounds, which removes
-the boundary solutions <code>"optim"</code> can return; it is the recommended
-setting and is expected to become the default.</p></dd>
+<dd><p>Character. How to solve the fit. <code>"profile"</code> (the
+default) exploits the fact that the curve is linear in the betas once
+lambda is fixed: the betas are solved by least squares in closed form, and
+lambda alone is searched over one dimension, by a log-spaced grid and then
+a refinement between the bracketing points. <code>"optim"</code> searches all
+four parameters numerically, as in versions before 0.6.0.</p>
+<p>Profiling is the default because it is better on every axis measured over
+200 curves from the bundled panel: a lower mean fit error from any
+starting lambda (5.57 bp against 5.74 from the package default, 8.52 from
+0.0609 and 5.97 from 1.5), exact independence of the starting value
+(a spread of 0.000 bp against 2.775), roughly a third of the run time, and
+no convergence failures. Where the two disagree on lambda by more than
+0.05 – 15 of those 200 curves – the profiled fit is the better of the two
+on all 15. It also needs no beta start values or beta bounds, which
+removes a class of boundary solution <code>"optim"</code> can return.</p>
+<p><code>"optim"</code> remains available and is unchanged apart from the scaled
+objective; pass it to reproduce a fit made with an earlier version.</p></dd>
+
+
+<dt id="arg-control">control<a class="anchor" aria-label="anchor" href="#arg-control"></a></dt>
+<dd><p>List. Passed to <code><a href="https://rdrr.io/r/stats/optim.html" class="external-link">optim</a></code>'s <code>control</code>
+argument by <code>method = "optim"</code>; ignored by <code>method = "profile"</code>,
+which uses <code><a href="https://rdrr.io/r/stats/optimize.html" class="external-link">optimize</a></code>. The objective is minimised in
+squared basis points so that L-BFGS-B's relative convergence test is
+genuinely relative, which means <code>factr</code> keeps its documented meaning
+here and rarely needs changing.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -160,36 +189,38 @@ and raises a warning.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">maturities</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">3</span>, <span class="fl">5</span>, <span class="fl">7</span>, <span class="fl">10</span>, <span class="fl">20</span>, <span class="fl">30</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">yields</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.0050</span>, <span class="fl">0.0052</span>, <span class="fl">0.0055</span>, <span class="fl">0.0065</span>, <span class="fl">0.0078</span>, <span class="fl">0.0105</span>, <span class="fl">0.0128</span>, <span class="fl">0.0152</span>, <span class="fl">0.0215</span>, <span class="fl">0.0225</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">fit_ns_model</span><span class="op">(</span><span class="va">maturities</span>, <span class="va">yields</span><span class="op">)</span></span></span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Nelson-Siegel fit rests on a parameter bound (lambda); the factor decomposition is not identified. Widen lower_bounds/upper_bounds or check the yield scale.</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Nelson-Siegel curve fit</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta1 (level)     0.02405</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta2 (slope)     -0.02000</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta3 (curvature) 0.02439</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   lambda            0.07177</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   rmse              4.66 bp over 10 maturities</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta1 (level)     -1.23764</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta2 (slope)     1.24188</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta3 (curvature) 1.52159</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   lambda            0.01000</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   rmse              2.65 bp over 10 maturities</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   at bound          lambda (decomposition not identified)</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># The profiled fit solves the betas in closed form at each lambda, so it</span></span></span>
 <span class="r-in"><span><span class="co"># needs no start values and cannot return a clamped beta.</span></span></span>
 <span class="r-in"><span><span class="fu">fit_ns_model</span><span class="op">(</span><span class="va">maturities</span>, <span class="va">yields</span>, method <span class="op">=</span> <span class="st">"profile"</span><span class="op">)</span></span></span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Nelson-Siegel fit rests on a parameter bound (lambda); the factor decomposition is not identified. Widen lower_bounds/upper_bounds or check the yield scale.</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Nelson-Siegel curve fit</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta1 (level)     0.02707</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta2 (slope)     -0.02216</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta3 (curvature) -0.02021</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   lambda            0.33811</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   rmse              2.89 bp over 10 maturities</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta1 (level)     -1.23764</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta2 (slope)     1.24188</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta3 (curvature) 1.52159</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   lambda            0.01000</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   rmse              2.65 bp over 10 maturities</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   at bound          lambda (decomposition not identified)</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># A real curve from the bundled panel</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">latest</span> <span class="op">&lt;-</span> <span class="va">treasury_yields</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span>, <span class="op">]</span></span></span>
 <span class="r-in"><span><span class="fu">fit_ns_model</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sets.html" class="external-link">setdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">treasury_yields</span><span class="op">)</span>, <span class="st">"Date"</span><span class="op">)</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>             <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">latest</span><span class="op">[</span><span class="op">-</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span>, method <span class="op">=</span> <span class="st">"profile"</span><span class="op">)</span></span></span>
-<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Nelson-Siegel fit rests on a parameter bound (lambda); the factor decomposition is not identified. Widen lower_bounds/upper_bounds or check the yield scale.</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Nelson-Siegel curve fit</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta1 (level)     0.04988</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta2 (slope)     -0.00617</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   beta3 (curvature) -0.01404</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   lambda            0.50000</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   rmse              4.95 bp over 11 maturities</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   at bound          lambda (decomposition not identified)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta1 (level)     0.04927</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta2 (slope)     -0.00515</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   beta3 (curvature) -0.01551</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   lambda            0.66877</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   rmse              4.43 bp over 11 maturities</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

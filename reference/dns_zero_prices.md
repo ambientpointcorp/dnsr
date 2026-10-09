@@ -5,7 +5,7 @@ Prices zero-coupon bonds off a DNS curve.
 ## Usage
 
 ``` r
-dns_zero_prices(factors, maturities, lambda = 0.0609, face = 100)
+dns_zero_prices(factors, maturities, lambda = ns_lambda(3.5), face = 100)
 ```
 
 ## Arguments
@@ -22,10 +22,12 @@ dns_zero_prices(factors, maturities, lambda = 0.0609, face = 100)
 - lambda:
 
   Numeric. DNS decay parameter lambda, per unit of maturity. Maturities
-  here are in years, so the 0.0609 default is the Diebold-Li value for
-  maturities in months and places the curvature hump at 29.4 years
-  rather than months; see
+  here are in years, and the default places the curvature hump at 3.5
+  years, near the middle of a Treasury curve. It is written as
+  `ns_lambda(3.5)` so the number states its own meaning; see
   [`ns_lambda`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
+  Diebold and Li's 0.0609 is a month-denominated constant and in years
+  would place that hump at 29.4 years.
 
 - face:
 
@@ -56,6 +58,6 @@ curve <- fit_ns_model(maturities, as.numeric(treasury_yields[nrow(treasury_yield
 factors <- matrix(curve$parameters[1:3], nrow = 1)
 
 round(dns_zero_prices(factors, maturities, curve$parameters[["lambda"]])[1, ], 3)
-#>  [1] 99.647 98.942 97.891 95.808 91.721 87.748 80.161 73.072 63.390 38.755
-#> [11] 23.376
+#>  [1] 99.635 98.921 97.882 95.872 91.951 88.043 80.307 72.955 62.997 38.497
+#> [11] 23.519
 ```

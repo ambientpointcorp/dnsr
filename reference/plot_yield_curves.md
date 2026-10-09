@@ -48,7 +48,6 @@ A ggplot object with the yield curve plots.
 ``` r
 data(treasury_yields)
 dns_result <- fit_dns_model(treasury_yields, n_days = 30, show_progress = FALSE)
-#> Warning: Parameters rest on a bound in some fits: lambda on 14 (of 30 dates). The factor decomposition is not identified on those dates; see the at_bound element of the result, pass wider lower_bounds/upper_bounds, or check the yield scale.
 plot_yield_curves(treasury_yields, dns_result, max_plots = 4)
 
 ```

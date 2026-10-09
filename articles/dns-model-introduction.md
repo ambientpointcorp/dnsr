@@ -69,9 +69,8 @@ in years.**
 
 This is worth labouring because the conventional value is a trap.
 Diebold and Li chose $`\lambda = 0.0609`$ working in *months*, where it
-places the curvature hump just short of 30 months. That is the number
-this package uses as a default, and in years it means something quite
-different:
+places the curvature hump just short of 30 months. Quoted against
+maturities in years it means something quite different:
 
 ``` r
 
@@ -94,8 +93,9 @@ ns_lambda(30)    # the Diebold-Li criterion, in the months they worked in
 ```
 
 So the honest reading of `0.0609` is that it is right for
-month-denominated maturities and merely conventional here. Compare the
-two:
+month-denominated maturities and simply wrong here, which is why this
+package’s default is `ns_lambda(3.5)` – a hump at three and a half
+years, near the middle of a Treasury curve. Compare the two:
 
 ``` r
 
@@ -123,13 +123,13 @@ both ways and comparing $`\beta_2`$ with the spread the market quotes:
 
 | $`\lambda`$ | hump at | cor($`\beta_2`$, 3m-10y) | same sign | median fit |
 |------------:|--------:|-------------------------:|----------:|-----------:|
-|      0.0609 |  29.5 y |               **-0.929** |    **5%** |    23.0 bp |
+|      0.0609 |  29.4 y |               **-0.928** |    **5%** |    23.0 bp |
 |       0.448 |   4.0 y |               **+0.941** |   **90%** |     5.3 bp |
 
-At the default the slope factor is *anti*-correlated with the slope, and
-carries the right sign on one date in twenty. That is the cost of the
-unit mismatch, and it is why the rest of this vignette fixes $`\lambda`$
-somewhere sensible rather than at the default.
+At the month-denominated value the slope factor is *anti*-correlated
+with the slope, and carries the right sign on one date in twenty. That
+is the cost of the unit mismatch, and it is why `dnsr` does not use
+0.0609 as its default.
 
 Two cautions before leaning on
 [`ns_lambda()`](https://ambientpointcorp.github.io/dnsr/reference/ns_lambda.md).
@@ -159,55 +159,60 @@ date, then a time-series estimate of how the resulting factors move.
 ## Fitting a Single Curve
 
 [`fit_ns_model()`](https://ambientpointcorp.github.io/dnsr/reference/fit_ns_model.md)
-fits one cross-section. The `"profile"` method solves the three betas in
-closed form at each $`\lambda`$ and searches only over $`\lambda`$, so
-it needs no starting values:
+fits one cross-section. The default `"profile"` method solves the three
+betas in closed form at each $`\lambda`$ and searches only over
+$`\lambda`$, so it needs no starting values for them:
 
 ``` r
 
 maturities <- as.numeric(setdiff(names(treasury_yields), "Date"))
 latest <- as.numeric(treasury_yields[nrow(treasury_yields), -1])
 
-curve <- fit_ns_model(maturities, latest, method = "profile")
-#> Warning in fit_ns_model(maturities, latest, method = "profile"): Nelson-Siegel
-#> fit rests on a parameter bound (lambda); the factor decomposition is not
-#> identified. Widen lower_bounds/upper_bounds or check the yield scale.
+curve <- fit_ns_model(maturities, latest)
 curve
 #> Nelson-Siegel curve fit
-#>   beta1 (level)     0.04988
-#>   beta2 (slope)     -0.00617
-#>   beta3 (curvature) -0.01404
-#>   lambda            0.50000
-#>   rmse              4.95 bp over 11 maturities
-#>   at bound          lambda (decomposition not identified)
+#>   beta1 (level)     0.04927
+#>   beta2 (slope)     -0.00515
+#>   beta3 (curvature) -0.01551
+#>   lambda            0.66877
+#>   rmse              4.43 bp over 11 maturities
 ```
 
-That warning is worth taking seriously rather than silencing. The fit
-reports any parameter that came to rest on one of its bounds, because a
-clamped fit can still look respectable on RMSE while the factor
-decomposition means nothing, and `L-BFGS-B` reports convergence at a
-bound, so `success` alone cannot tell you.
+The fit also reports whether any parameter came to rest on one of its
+bounds, which is worth checking rather than assuming. A clamped fit can
+still look respectable on RMSE while the factor decomposition means
+nothing, and a bounded optimiser reports convergence at a bound, so
+`success` alone cannot tell you:
 
 ``` r
 
 curve$at_bound
 #>  beta1  beta2  beta3 lambda 
-#>  FALSE  FALSE  FALSE   TRUE
+#>  FALSE  FALSE  FALSE  FALSE
 ```
 
-Here the default ceiling on $`\lambda`$, 0.5, is genuinely binding: this
-curve wants a faster decay than the conventional value allows. Given
-room, it finds an interior optimum and fits better:
+Nothing is clamped here. It is easy to arrange that it is, and the point
+is worth seeing, because this is exactly what the old ceiling of 0.5 did
+to this curve – it wants a faster decay than that allowed:
 
 ``` r
 
-wider <- fit_ns_model(maturities, latest, method = "profile",
-                      lower_bounds = c(-1, -1, -1, 0.01),
-                      upper_bounds = c(1, 1, 1, 5))
-c(lambda = wider$parameters[["lambda"]], rmse_bp = wider$rmse * 10000)
-#>    lambda   rmse_bp 
-#> 0.6687707 4.4314318
+pinched <- fit_ns_model(maturities, latest,
+                        upper_bounds = c(0.2, 0.5, 0.5, 0.5))
+#> Warning in fit_ns_model(maturities, latest, upper_bounds = c(0.2, 0.5, 0.5, :
+#> Nelson-Siegel fit rests on a parameter bound (lambda); the factor decomposition
+#> is not identified. Widen lower_bounds/upper_bounds or check the yield scale.
+c(lambda = pinched$parameters[["lambda"]], rmse_bp = pinched$rmse * 10000)
+#>   lambda  rmse_bp 
+#> 0.500000 4.948436
+pinched$at_bound
+#>  beta1  beta2  beta3 lambda 
+#>  FALSE  FALSE  FALSE   TRUE
 ```
+
+The clamped fit reports $`\lambda`$ sitting exactly on 0.5 and a worse
+error, and says so through `at_bound` instead of presenting it as an
+unqualified success.
 
 ## Fitting the Panel
 
@@ -217,15 +222,18 @@ which row order the panel arrives in.
 
 For a panel there is a choice to make that does not arise for a single
 curve. If $`\lambda`$ is estimated freely it varies from date to date –
-on this data from 0.04 to 0.50 – and then $`\beta_2`$ on one date does
-not mean the same thing as $`\beta_2`$ on the next, because the loading
-it multiplies has changed shape. The betas stop being a comparable time
-series, which is precisely what the next step needs them to be.
+on this data from 0.17 to 2.00, the ceiling – and then $`\beta_2`$ on
+one date does not mean the same thing as $`\beta_2`$ on the next,
+because the loading it multiplies has changed shape. The betas stop
+being a comparable time series, which is precisely what the next step
+needs them to be.
 
 Standard DNS practice, following Diebold and Li, therefore fixes
 $`\lambda`$ at a single value for the whole panel. It costs
-cross-sectional fit – about 14 basis points median here against 7 with
-$`\lambda`$ free – and buys factors that can be modelled over time.
+cross-sectional fit – about 6.4 basis points median here against 4.5
+with $`\lambda`$ free – and buys factors that can be modelled over time.
+The size of that trade is worth noting: a couple of basis points of fit
+for factors that are comparable across dates.
 
 `ns_lambda(4)` puts the curvature hump at four years, which is about
 where this panel wants it, and keeps the loadings distinct enough for
@@ -258,7 +266,7 @@ summary(recent)
 #>             min     mean      max      sd
 #> beta1   0.04314  0.04649  0.05018 0.00135
 #> beta2  -0.00663  0.00680  0.01352 0.00484
-#> beta3  -0.04876 -0.02768 -0.00824 0.01029
+#> beta3  -0.04877 -0.02768 -0.00824 0.01029
 #> lambda  0.44832  0.44832  0.44832 0.00000
 #> 
 #> Fit error (basis points):
@@ -308,7 +316,7 @@ c(
   same_sign = mean(sign(recent$parameters$beta2) == sign(observed_spread))
 )
 #> correlation   same_sign 
-#>   0.9410184   0.9040000
+#>   0.9410156   0.9040000
 ```
 
 Closely, and with the sign the algebra predicts: the slope loading is 1
@@ -322,7 +330,7 @@ And the level factor should look like the policy cycle:
 ``` r
 
 range(recent$parameters$beta1)
-#> [1] 0.04314035 0.05018489
+#> [1] 0.04314019 0.05018226
 ```
 
 ### Where a three-factor curve runs out
@@ -402,9 +410,9 @@ dynamics
 #>   structure        diagonal
 #> 
 #>                 kappa se_kappa   theta  sigma half_life_y
-#> level (b1)     0.0604   0.3379  0.0862 0.0088     11.4707
-#> slope (b2)     0.3534   0.3484 -0.0058 0.0114      1.9614
-#> curvature (b3) 1.5237   0.7038 -0.0150 0.0306      0.4549
+#> level (b1)     0.0604   0.3378  0.0862 0.0088     11.4681
+#> slope (b2)     0.3534   0.3484 -0.0058 0.0114      1.9615
+#> curvature (b3) 1.5240   0.7039 -0.0150 0.0306      0.4548
 #> 
 #>   stable           TRUE (eigenvalues 1.524 0.353 0.060)
 ```
@@ -417,13 +425,13 @@ and the half-life interval says so:
 
 dynamics$beta1$se
 #>        kappa        theta        sigma 
-#> 0.3378614464 0.3157739879 0.0007482356
+#> 0.3378346439 0.3155525922 0.0007481728
 dynamics$beta1$t_value
 #>     kappa     theta 
-#> 0.1788525 0.2730089
+#> 0.1789075 0.2731285
 dynamics$beta1$half_life_ci
 #>     lower     upper 
-#> 0.9592091       Inf
+#> 0.9592606       Inf
 ```
 
 $`\kappa`$ also carries a well-known upward small-sample bias of order
@@ -454,7 +462,7 @@ round(full$kappa_matrix, 3)
 #>        beta1  beta2  beta3
 #> beta1  0.436 -0.494 -0.391
 #> beta2 -1.190  0.866 -0.843
-#> beta3  0.921  0.634  1.674
+#> beta3  0.921  0.635  1.675
 ```
 
 The eigenvalues of that matrix decide whether the system is stable,
@@ -464,7 +472,7 @@ matter:
 ``` r
 
 round(Re(full$eigenvalues), 3)
-#> [1] 1.175 1.175 0.627
+#> [1] 1.176 1.176 0.626
 full$system_stability
 #> [1] TRUE
 ```
@@ -503,7 +511,7 @@ round(Re(dynamics$eigenvalues), 3)
 # 5. How well identified is the reversion speed?
 dynamics$beta1$half_life_ci
 #>     lower     upper 
-#> 0.9592091       Inf
+#> 0.9592606       Inf
 ```
 
 Taken together: a high success rate with no bound hits, a tolerable
@@ -544,7 +552,7 @@ simulation
 #>   terminal factors 0.0597  -0.0065  -0.0145
 #>     (sd)           0.0177  0.0135  0.0173
 #>   maturities        0.0833  0.2500  0.5000  1.0000  2.0000  3.0000  5.0000  7.0000 10.0000 20.0000 30.0000
-#>   terminal yields  5.32  5.31  5.31  5.30  5.28  5.26  5.23  5.21  5.19  5.18  5.24 (% mean)
+#>   terminal yields  5.30  5.27  5.24  5.19  5.18  5.21  5.33  5.44  5.57  5.77  5.83 (% mean)
 ```
 
 Simulated curves at a few horizons. The facets follow the calendar
@@ -595,12 +603,12 @@ data.frame(
   par_pct = round(dns_par_yields(factors, coupon_maturities, lambda)[1, ] * 100, 3)
 )
 #>   maturity zero_pct discount price_100 par_pct
-#> 1      0.5    4.293   0.9788     97.88   4.339
-#> 2      1.0    4.249   0.9584     95.84   4.295
-#> 3      2.0    4.227   0.9189     91.89   4.272
-#> 4      5.0    4.361   0.8041     80.41   4.400
-#> 5     10.0    4.596   0.6316     63.16   4.614
-#> 6     30.0    4.853   0.2332     23.32   4.827
+#> 1      0.5    4.282   0.9788     97.88   4.328
+#> 2      1.0    4.216   0.9587     95.87   4.261
+#> 3      2.0    4.196   0.9195     91.95   4.240
+#> 4      5.0    4.386   0.8031     80.31   4.423
+#> 5     10.0    4.621   0.6300     63.00   4.639
+#> 6     30.0    4.824   0.2352     23.52   4.812
 ```
 
 Par yields are the coupon rate that prices a bullet bond at par. They
@@ -620,8 +628,8 @@ rbind(
   forward = round(calculate_dns_forwards(factors, coupon_maturities, lambda)[1, ] * 100, 3)
 )
 #>          [,1]  [,2]  [,3]  [,4]  [,5]  [,6]
-#> spot    4.293 4.249 4.227 4.361 4.596 4.853
-#> forward 4.234 4.188 4.244 4.649 4.936 4.988
+#> spot    4.282 4.216 4.196 4.386 4.621 4.824
+#> forward 4.188 4.132 4.248 4.726 4.914 4.927
 ```
 
 ## Looking at the Panel
@@ -669,7 +677,7 @@ comparison <- compare_term_structure_models(
 )
 comparison$metrics
 #>                    Model     RMSE      MAE  MaxError
-#> 1          Nelson-Siegel 8.873355 7.506098 15.404612
+#> 1          Nelson-Siegel 4.431432 3.887569  8.700489
 #> 2 Nelson-Siegel-Svensson 3.542643 2.502529  8.621915
 #> 3           Cubic Spline 5.561295 3.995767 11.985578
 ```
