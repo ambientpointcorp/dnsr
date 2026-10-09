@@ -1,3 +1,48 @@
+# dnsr 0.7.0
+
+## One-step state-space estimation
+
+`estimate_dns_state_space()` fits the DNS model by maximum likelihood with a
+Kalman filter, treating the factors as an unobserved state rather than fitting
+them curve by curve and then modelling them. This is the state-space form of
+Diebold, Rudebusch and Aruoba (2006), as against the two-step approach of
+Diebold and Li (2006) that `fit_dns_model()` and `estimate_dns_dynamics()`
+implement.
+
+The two-step estimator uses the fitted betas as data. They are estimates
+carrying sampling error, and using them as observed biases mean reversion
+upward. Filtering the factors propagates that uncertainty into the likelihood
+and estimates lambda jointly with the dynamics.
+
+The factor system is parameterised in continuous time, with the transition
+matrices derived from the exact Ornstein-Uhlenbeck law rather than estimated
+freely. The covariance is then positive semi-definite at every trial point,
+`kappa > 0` makes the system stationary, and the result is accepted by
+`dns_dynamics_to_sim_params()` without conversion. The cost is that
+cross-factor terms cannot be represented; use
+`estimate_dns_dynamics(structure = "full")` on two-step betas for those.
+
+The result carries smoothed and filtered factors, measurement error by
+maturity, the log-likelihood with AIC and BIC, and the two-step estimates used
+as starting values. `print()` and `summary()` methods report them.
+
+On the precision of the estimates, measured by simulating from a known state
+space and re-estimating: lambda, the shock volatilities and the measurement
+error are recovered to within 1 to 5 percent at 20, 40 and 100 years of
+monthly data, and the smoothed factors correlate above 0.99 with the simulated
+ones. The mean reversion speeds and long-run means are not: kappa for the
+level factor is 167 percent too high at 20 years, 77 percent at 40 and 58
+percent at 100. The errors shrink as the sample grows, so this reflects the
+difficulty of estimating mean reversion rather than an error in the
+implementation, and it applies to the two-step route as well.
+`?estimate_dns_state_space` gives the full comparison.
+
+## Documentation
+
+Rhetorical phrasing removed from the documentation, comments and vignettes in
+favour of plain statements. The introduction vignette gains a section on
+one-step estimation and no longer lists the Kalman filter as absent.
+
 # dnsr 0.6.0
 
 The lambda search, and the default it starts from. Every function keeps its
@@ -26,7 +71,7 @@ error over 120 sampled dates:
 | `initial_lambda = 0.0609`  | 10.308 bp | 9.715 bp |
 | `initial_lambda = 0.5124`  |  9.617 bp | 8.620 bp |
 
-Two consequences worth knowing. Warm starting in `fit_dns_model()` now changes
+Two consequences. Warm starting in `fit_dns_model()` now changes
 speed rather than answers, because both chains reach the same optimum. And a
 search that moves can reach the degenerate small-lambda corner, where the level
 and slope loadings both tend to 1, the design goes collinear and the curvature
@@ -57,10 +102,10 @@ fixed lambda to all 1,501 curves:
 | median day-to-day change in beta3 | 37.21 bp | 8.61 bp |
 | largest beta3                    | 2386 bp | 491 bp |
 
-The factor columns matter more than the fit column: at 0.0609 the factors were
+The factor columns are the more consequential ones: at 0.0609 the factors were
 five times noisier day to day and beta3 reached 23.9 percentage points, because
-two of the three were not identified and wandered in offsetting directions.
-This package exists to estimate their dynamics, so that was the real cost.
+two of the three were not separately identified and moved in offsetting
+directions. The package estimates the dynamics of those factors.
 
 The ceiling on lambda rises from 0.5 to 2. At 0.5 it bound roughly a third of
 real month-end curves, and raising the default start made that worse before it
@@ -72,11 +117,10 @@ made it better. Fitting the 72 month-ends in the bundled panel:
 | new default, old ceiling | 4.685 bp | 29 of 72 |
 | new default, new ceiling | 4.467 bp |  9 of 72 |
 
-A clamped lambda is still reported through `at_bound` rather than silently. The
-ceiling is 2 rather than higher on purpose: lambda is a shape parameter, and
-factors estimated at different lambda are not on the same scale, so buying
-in-sample fit by letting it float freely costs the comparability across dates
-that the dynamics step depends on.
+A clamped lambda is reported through `at_bound`. The ceiling is 2 rather than
+higher because lambda is a shape parameter: factors estimated at different
+lambda are not on the same scale, so a looser ceiling lowers in-sample error
+at the cost of comparability across dates, which the dynamics step requires.
 
 ## method = "profile" searches lambda globally
 
@@ -123,8 +167,8 @@ unconstrained least squares, so it does not consult `lower_bounds` and
 `compare_term_structure_models()` fits the Nelson-Siegel row with
 `fit_ns_model()`, so it inherited both defects above. On the bundled panel it
 reported 8.87 bp for Nelson-Siegel, behind the cubic spline's 5.56; it now
-reports 4.43, ahead of it. Nothing about the comparison changed -- the row was
-simply being fitted badly.
+reports 4.43, ahead of it. The comparison itself is unchanged; the row was
+being fitted with a poor lambda and a weak search.
 
 It gains `initial_lambda` and `method`, forwarded to `fit_ns_model()` and
 appended to the signature, so the row is reproducible rather than merely

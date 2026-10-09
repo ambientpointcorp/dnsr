@@ -144,12 +144,11 @@ yield_data <- get_treasury_yield_combined(
 )
 ```
 
-Two properties of the cache are worth knowing. Keys cover the series id and
-the requested date range only, so **the API key is never part of a key and is
-never written to disk**. And a cache hit is served *before* the key is looked
-up, which means a cached corpus can be replayed with no key configured at all
--- useful in CI, or for making an analysis reproducible by someone who has no
-key of their own.
+Two properties of the cache. Keys cover the series id and the requested date
+range only, so the API key is never part of a key and is never written to
+disk. And a cache hit is served before the key is looked up, so a cached
+corpus can be replayed with no key configured, which is useful in CI and for
+reproducing an analysis without a key.
 
 The cache never expires on its own. Delete the directory, or the file for one
 series, when you want fresh data; an open-ended `end_date` will otherwise keep
@@ -231,10 +230,10 @@ calendar time**:
 yield_data <- get_treasury_yield_combined(start_date = "1990-01-01")
 ```
 
-The direction matters more than it may appear. The frame is returned
-most-recent-first, so filling in row order would take each missing yield from
-a *later* date, putting information into the past that did not exist there --
-look-ahead bias in anything calibrated on the result.
+The direction is significant. The frame is returned most-recent-first, so
+filling in row order would take each missing yield from a later date, placing
+information into the past that was not available then. That is look-ahead bias
+in anything calibrated on the result.
 
 For long histories, cap how far a value may be carried so a multi-year hole is
 not silently bridged:

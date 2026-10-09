@@ -191,15 +191,14 @@ where:
 - $\beta_3$ represents the curvature
 - $\lambda$ controls the decay rate of factor loadings
 
-`λ` is measured *per unit of maturity*, and every function here takes
-maturities in **years**. The conventional 0.0609 comes from Diebold and Li,
-who worked in **months**, where it places the curvature hump just short of 30
-months; in years the same number puts it at 29.4, off the end of most curves,
-where the slope loading is nearly parallel to the level loading and the two
-factors are not separately identified. Since 0.6.0 the default is therefore
-`ns_lambda(3.5)`, a hump at three and a half years. `ns_lambda()` and
-`ns_curvature_peak()` convert between a decay and the maturity its hump sits
-at, so the choice can be stated in terms you can check:
+`λ` is measured per unit of maturity, and every function here takes
+maturities in years. The conventional 0.0609 comes from Diebold and Li, who
+worked in months, where it places the curvature hump just short of 30 months.
+In years the same number places it at 29.4, beyond the end of most curves,
+where the slope loading is close to the level loading and the two factors are
+not separately identified. Since 0.6.0 the default is `ns_lambda(3.5)`, a hump
+at three and a half years. `ns_lambda()` and `ns_curvature_peak()` convert
+between a decay and its hump maturity:
 
 ```r
 ns_curvature_peak(0.0609)   # 29.4 -- in years, the hump is off the curve
@@ -210,6 +209,19 @@ ns_lambda(3.5)              # 0.512 -- the package default
 In the dynamic extension, the factors $\beta_1$, $\beta_2$, and $\beta_3$ are modeled as mean-reverting Ornstein-Uhlenbeck processes:
 
 $$d\beta_i(t) = \kappa_i(\theta_i - \beta_i(t))dt + \sigma_i dW_i(t)$$
+
+Two estimators are available. `fit_dns_model()` followed by
+`estimate_dns_dynamics()` is the two-step approach of Diebold and Li: fit each
+cross-section, then model the resulting factors.
+`estimate_dns_state_space()` is the one-step state-space approach of Diebold,
+Rudebusch and Aruoba: the factors are an unobserved state, filtered out of the
+yields by maximum likelihood, with lambda estimated jointly with the dynamics.
+
+```r
+one_step <- estimate_dns_state_space(treasury_yields, lambda = ns_lambda(3.5))
+one_step
+params <- dns_dynamics_to_sim_params(one_step)   # simulates without conversion
+```
 
 ## Visualizations
 
