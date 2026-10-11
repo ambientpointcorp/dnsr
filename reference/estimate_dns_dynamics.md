@@ -171,7 +171,7 @@ dynamics
 # Standard errors show how weakly kappa is identified in a short sample
 dynamics$beta1$se
 #>        kappa        theta        sigma 
-#> 0.4550856550 0.0162310889 0.0009470412 
+#> 0.4550856620 0.0162310881 0.0009470413 
 dynamics$beta1$half_life_ci
 #>     lower     upper 
 #> 0.5576263       Inf 

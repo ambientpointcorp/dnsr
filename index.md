@@ -1,5 +1,7 @@
 # dnsr: Dynamic Nelson-Siegel Model in R
 
+Reference documentation: <https://ambientpointcorp.github.io/dnsr>
+
 ## Overview
 
 The `dnsr` package provides a comprehensive implementation of the
