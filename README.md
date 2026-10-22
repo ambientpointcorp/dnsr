@@ -310,7 +310,7 @@ If you use `dnsr` in your research, please cite:
   title = {dnsr: Dynamic Nelson-Siegel Model in R},
   author = {Ariel R. H.},
   year = {2026},
-  note = {R package version 0.4.0},
+  note = {R package version 0.7.0},
   url = {https://github.com/ambientpointcorp/dnsr},
 }
 ```
