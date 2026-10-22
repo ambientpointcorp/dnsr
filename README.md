@@ -2,6 +2,9 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/ambientpointcorp/dnsr/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main)](https://github.com/ambientpointcorp/dnsr/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/ambientpointcorp/dnsr/actions/workflows/pkgdown.yaml/badge.svg?branch=main)](https://github.com/ambientpointcorp/dnsr/actions/workflows/pkgdown.yaml)
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit)
 <!-- badges: end -->
 
 Reference documentation: <https://ambientpointcorp.github.io/dnsr>
