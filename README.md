@@ -303,13 +303,13 @@ The `dnsr` package is useful for:
 
 ## Citation
 
-If you use `dnsr` in your research, please cite:
+If you use `dnsr` in your research, please cite it. The entry below is what `citation("dnsr")` prints; running it reports the version you actually have installed, which is the one worth recording.
 
 ```
 @Manual{,
-  title = {dnsr: Dynamic Nelson-Siegel Model in R},
-  author = {Ariel R. H.},
-  year = {2026},
+  title = {dnsr: Dynamic Nelson-Siegel Term Structure Model},
+  author = {Ariel {R. H.}},
+  year = {2025},
   note = {R package version 0.7.0},
   url = {https://github.com/ambientpointcorp/dnsr},
 }
